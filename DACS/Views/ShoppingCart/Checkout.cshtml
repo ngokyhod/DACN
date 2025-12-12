@@ -52,7 +52,8 @@
 }
 else
 {
-    <form asp-action="Checkout" method="post">
+        <form asp-controller="ShoppingCart" asp-action="Checkout" method="post">
+
         <div class="row">
             <!-- Cột trái: Thông tin giỏ hàng -->
             <div class="col-md-7">
@@ -114,14 +115,12 @@ else
 
                 <div class="form-group">
                     <label for="M_PhuongThuc">Phương thức thanh toán</label>
-                    <select asp-for="M_PhuongThuc" class="form-control" required>
-                        <option value="">-- Chọn phương thức --</option>
-                        <option value="PT001">Thanh toán khi nhận hàng (COD)</option>
-                        <option value="PT002">Chuyển khoản ngân hàng</option>
-                        <option value="PT003">Ví điện tử MoMo</option>
-                        <option value="PT004">Ví điện tử ZaloPay</option>
-                        <!-- Thêm các phương thức khác nếu có -->
-                    </select>
+                        <select asp-for="M_PhuongThuc" class="form-control" required>
+                            <option value="">-- Chọn phương thức --</option>
+                            <option value="PT001">Thanh toán khi nhận hàng (COD)</option>
+                            <option value="PT005">Thanh toán VNPAY</option>
+                        </select>
+
                 </div>
                 
 

@@ -1,5 +1,6 @@
 ﻿using DACS.Extention;
 using DACS.Models;
+using DACS.Models.AI;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -74,6 +75,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ChatHistory> ChatHistory { get; set; }
     public DbSet<SanPhamYeuThich> SanPhamYeuThichs { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<BlockchainTransaction> BlockchainTransaction { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
 
     {

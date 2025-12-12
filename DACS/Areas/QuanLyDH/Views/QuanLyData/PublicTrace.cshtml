@@ -1,0 +1,368 @@
+﻿@model DACS.Areas.Owner.Models.OrderManagementViewModel
+@{
+    ViewData["Title"] = "Truy Vấn Blockchain Theo Block";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Admin</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <link rel="stylesheet" href="~/css/AdminLayout.css" />
+    <link rel="stylesheet" href="~/css/AdminOrderManagement.css" />
+    <style>
+        /* CSS cơ bản cho ví dụ này - Bạn nên đưa vào file CSS riêng */
+        body, html {
+            height: 100%;
+        }
+
+        .container {
+            display: grid;
+            max-width: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            flex-direction: row;
+        }
+
+        .container-fluid.d-flex { /* Sửa lại selector cho đúng */
+            height: 100%;
+            padding: 0; /* Loại bỏ padding nếu sidebar và main-content đã có */
+        }
+
+        .sidebar {
+            background-color: #212529;
+            color: #fff;
+            padding: 15px;
+            width: 250px;
+            flex-shrink: 0;
+            min-height: 100vh;
+        }
+
+            .sidebar h2 {
+                border-bottom: 1px solid #495057;
+                padding-bottom: 10px;
+                font-size: 1.5rem;
+            }
+
+            .sidebar .nav-link {
+                color: #adb5bd;
+                padding: 8px 15px;
+            }
+
+                .sidebar .nav-link.active, .sidebar .nav-link:hover {
+                    color: #fff;
+                    background-color: #495057;
+                    border-radius: 0.25rem;
+                }
+
+        .main-content-area {
+            padding: 25px;
+            background-color: #f8f9fa;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            font-size: 1.75rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            color: #343a40;
+        }
+
+        .stat-card {
+            background-color: #fff;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            text-align: center;
+        }
+
+            .stat-card .value {
+                font-size: 1.75rem;
+                font-weight: 600;
+                /* Màu sẽ được set inline hoặc qua class động */
+            }
+
+            .stat-card .label {
+                font-size: 0.9rem;
+                color: #6c757d;
+                margin-top: 0.25rem;
+            }
+
+        .filter-card {
+            background-color: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+
+        .table-container {
+            background-color: #fff;
+            padding: 1.5rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+
+        .table th {
+            font-weight: 600;
+            background-color: #e9ecef;
+            white-space: nowrap;
+        }
+
+        .table td {
+            vertical-align: middle;
+            font-size: 0.9rem;
+        }
+
+        .table .actions a, .table .actions button {
+            margin-right: 5px;
+            margin-bottom: 5px; /* Thêm khoảng cách dưới cho các nút nếu chúng wrap */
+            font-size: 0.85rem;
+        }
+
+        .table .actions .btn-sm {
+            padding: 0.2rem 0.4rem;
+        }
+
+        .action-group .btn {
+            margin-right: 3px; /* Khoảng cách nhỏ giữa các icon button */
+        }
+
+        .table .badge {
+            font-size: 0.75rem;
+            padding: 0.3em 0.5em;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid d-flex p-0">
+    <div class="sidebar">
+        <h2>Quản lý đơn hàng </h2>
+        <ul class="nav flex-column">
+            @* Điều chỉnh các asp-controller và asp-action cho phù hợp với cấu trúc của bạn *@
+            <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyDH" asp-action="Index" class="nav-link "><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
+            <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh Toán</a></li>
+                <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyData" asp-action="PublicTrace" class="nav-link active"><i class="fas fa-link"></i> Quản lý Data</a></li>
+            <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })" method="post" id="logoutForm_sidebar_index" class="mt-3">
+                @* Moved mt-3 to form *@
+                <button type="submit" class="list-group-item list-group-item-action text-danger border-0 bg-transparent p-0 w-100 text-start">
+                    @* Adjusted button style to better match list items *@
+                    <span class="list-group-item list-group-item-action border-0 text-danger"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Đăng xuất</span>
+                </button>
+            </form>
+        </ul>
+    </div>
+        <div class="main-content-area">
+<h1>🔍 Truy Vấn Blockchain Theo Số Khối (Block Number)</h1>
+<p>Hiển thị các bản ghi lịch sử lô hàng (HistoryAdded Events) trong khối.</p>
+<hr />
+
+<div class="form-group row">
+    <label for="blockNumberInput" class="col-sm-2 col-form-label">Số Khối (Block)</label>
+    <div class="col-sm-6">
+        <input type="number" class="form-control" id="blockNumberInput" placeholder="Ví dụ: 1" required min="1">
+    </div>
+    <div class="col-sm-4">
+        <button id="searchButton" class="btn btn-primary">Tra Cứu Khối</button>
+    </div>
+</div>
+
+<hr />
+<div id="resultContainer">
+</div>
+<div id="txCheckArea" class="mb-3">
+    <div class="input-group mb-3">
+        <input type="text" id="txHashInput" class="form-control" placeholder="Dán TX Hash từ C# vào đây (0x...)">
+        <div class="input-group-append">
+            <button class="btn btn-warning" id="checkTxButton">Kiểm Tra TX Hash</button>
+        </div>
+    </div>
+    <div id="result"></div>
+                <div id="debugResult"></div>
+
+</div>
+
+<!-- Block result riêng -->
+<div id="blockControls" class="mb-3">
+    <!-- nút Check all sẽ xuất hiện khi có transactions -->
+    <button id="checkAllButton" class="btn btn-secondary" style="display:none">Kiểm Tra Tất Cả TX Trong Block</button>
+</div>
+
+<div id="blockResult"></div>
+
+</div>
+</div>
+</body>
+</html>
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script>
+       
+    const GANACHE_RPC_URL = 'http://127.0.0.1:7545';
+    const EXPECTED_CONTRACT = '0x2D05686d12d1B3677413BD20953cD26AeE18bd6a'.toLowerCase();
+
+    const web3 = new Web3(new Web3.providers.HttpProvider(GANACHE_RPC_URL));
+       
+    // --- TX single check (không bị mất khi tra block) ---
+    document.getElementById('checkTxButton').addEventListener('click', async () => {
+      const txHash = document.getElementById('txHashInput').value.trim();
+      const debugResult = document.getElementById('debugResult');
+      debugResult.innerHTML = "Đang kiểm tra...";
+
+      try {
+        const receipt = await web3.eth.getTransactionReceipt(txHash);
+        if (!receipt) {
+          debugResult.innerHTML = `<div class="alert alert-danger">❌ Không tìm thấy giao dịch này trên Ganache.</div>`;
+          return;
+        }
+
+        const usedContract = receipt.to ? receipt.to.toLowerCase() : "Không xác định";
+        const statusIcon = receipt.status ? "✅ Thành công" : "❌ Thất bại";
+
+        let html = `<ul class="list-group mb-2">
+                      <li class="list-group-item"><strong>Block Number:</strong> ${receipt.blockNumber}</li>
+                      <li class="list-group-item"><strong>Trạng thái:</strong> ${statusIcon}</li>
+                      <li class="list-group-item ${usedContract === EXPECTED_CONTRACT ? 'list-group-item-success' : 'list-group-item-danger'}">
+                        <strong>Contract Đã Gọi (C#):</strong> ${usedContract} <br>
+                        <strong>Contract Mong Đợi (JS):</strong> ${EXPECTED_CONTRACT}
+                      </li>
+                    </ul>
+                    <details><summary>Raw logs (console)</summary><pre>${JSON.stringify(receipt.logs, null, 2)}</pre></details>`;
+
+        if (usedContract !== EXPECTED_CONTRACT) {
+          html += `<div class="alert alert-danger mt-2">⚠️ PHÁT HIỆN LỖI: C# đang ghi vào Contract CŨ, còn JS đang đọc Contract MỚI.</div>`;
+        } else {
+          html += `<div class="alert alert-success mt-2">✅ Địa chỉ khớp nhau!</div>`;
+       
+       console.log("Raw Logs:", receipt.logs);
+             
+    }
+
+
+        
+    
+
+        
+        
+        debugResult.innerHTML = html;
+      } catch (e) {
+        debugResult.innerHTML = `<div class="alert alert-danger">Lỗi: ${e.message}</div>`;
+      }
+    });
+
+    // --- Tra block và hiển thị danh sách TX (không ghi đè txCheckArea) ---
+    document.getElementById('searchButton').addEventListener('click', async () => {
+      const blockNumber = document.getElementById('blockNumberInput').value.trim();
+      const blockDiv = document.getElementById('blockResult');
+      const checkAllBtn = document.getElementById('checkAllButton');
+
+      blockDiv.innerHTML = '';
+      checkAllBtn.style.display = 'none';
+
+      if (!blockNumber) {
+        blockDiv.innerHTML = `<div class="alert alert-warning">⚠️ Vui lòng nhập số block</div>`;
+        return;
+      }
+
+      try {
+        const block = await web3.eth.getBlock(blockNumber, true);
+        if (!block) {
+          blockDiv.innerHTML = `<div class="alert alert-danger">❌ Không tìm thấy block này trên Ganache</div>`;
+          return;
+        }
+
+        let html = `
+          <h3>📦 Thông Tin Block #${block.number}</h3>
+          <ul class="list-group mb-2">
+            <li class="list-group-item"><strong>Hash:</strong> ${block.hash}</li>
+            <li class="list-group-item"><strong>Parent:</strong> ${block.parentHash}</li>
+            <li class="list-group-item"><strong>Timestamp:</strong> ${new Date(block.timestamp * 1000).toLocaleString()}</li>
+            <li class="list-group-item"><strong>Transactions:</strong> ${block.transactions.length}</li>
+          </ul>
+          <hr/>
+          <h4>🔗 Danh sách giao dịch</h4>
+        `;
+
+        if (block.transactions.length === 0) {
+          html += `<div class="alert alert-info">Không có giao dịch trong block này.</div>`;
+        } else {
+          // danh sách transactions (mỗi tx một khung)
+          block.transactions.forEach(tx => {
+            html += `
+              <div class="card mb-2 tx-card" data-txhash="${tx.hash}">
+                <div class="card-body">
+                  <p><strong>TX Hash:</strong> <code>${tx.hash}</code></p>
+                  <p><strong>From:</strong> ${tx.from}</p>
+                  <p><strong>To:</strong> ${tx.to ?? '(Contract creation)'}</p>
+                  <p><strong>Gas:</strong> ${tx.gas}</p>
+                  <div class="tx-check-result"></div>
+                </div>
+              </div>
+            `;
+          });
+
+          // hiển thị nút check all
+          checkAllBtn.style.display = 'inline-block';
+
+          // gán data block vào nút để sử dụng sau
+          checkAllBtn.dataset.blockNumber = block.number;
+          checkAllBtn.dataset.txs = JSON.stringify(block.transactions.map(t => t.hash));
+        }
+
+        blockDiv.innerHTML = html;
+      } catch (err) {
+        blockDiv.innerHTML = `<div class="alert alert-danger">Lỗi: ${err.message}</div>`;
+      }
+    });
+
+    // --- Check all TXs in block: lặp qua transactions và gọi getTransactionReceipt cho từng TX ---
+    document.getElementById('checkAllButton').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const txs = JSON.parse(btn.dataset.txs || '[]');
+      if (!txs.length) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Đang kiểm tra...';
+
+      for (const txHash of txs) {
+        try {
+          const receipt = await web3.eth.getTransactionReceipt(txHash);
+          const card = document.querySelector(`.tx-card[data-txhash="${txHash}"]`);
+          const resultDiv = card ? card.querySelector('.tx-check-result') : null;
+
+          if (!receipt) {
+            if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-warning">TX chưa mined hoặc không tồn tại.</div>`;
+            continue;
+          }
+
+          const usedContract = receipt.to ? receipt.to.toLowerCase() : "Không xác định";
+          const ok = usedContract === EXPECTED_CONTRACT && receipt.status;
+
+          let rhtml = `<ul class="list-group">
+                         <li class="list-group-item"><strong>Block:</strong> ${receipt.blockNumber}</li>
+                         <li class="list-group-item"><strong>Contract:</strong> ${usedContract}</li>
+                         <li class="list-group-item"><strong>Trạng thái:</strong> ${receipt.status ? '✅' : '❌'}</li>
+                       </ul>`;
+
+          if (!ok) {
+            rhtml += `<div class="alert alert-danger mt-1">⚠️ Không khớp contract hoặc giao dịch thất bại.</div>`;
+          } else {
+            rhtml += `<div class="alert alert-success mt-1">✅ OK — TX mined và contract khớp.</div>`;
+          }
+
+          if (resultDiv) resultDiv.innerHTML = rhtml;
+        } catch (ex) {
+          console.error('Check tx error', ex);
+        }
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Kiểm Tra Tất Cả TX Trong Block';
+    });
+</script>

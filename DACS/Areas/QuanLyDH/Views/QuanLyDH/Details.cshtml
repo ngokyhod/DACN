@@ -165,7 +165,7 @@
                         <button type="submit" class="btn btn-warning"><i class="fas fa-hand-holding-usd me-1"></i> Hoàn Tiền (Sau Hủy)</button>
                     </form>
                 }
-                <a asp-action="UpdatePaymentStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-info"><i class="far fa-credit-card me-1"></i> Cập nhật TT Thanh Toán</a>
+        <a asp-action="UpdatePaymentStatus" asp-controller="QuanLyThanhToan" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-info"><i class="far fa-credit-card me-1"></i> Cập nhật TT Thanh Toán</a>
         <a asp-controller="QuanLyDH" asp-action="index">
             <i class="fas fa-arrow-left me-1"></i> Quay lại
         </a>

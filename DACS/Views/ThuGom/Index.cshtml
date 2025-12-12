@@ -13,52 +13,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
-
-    <style>
-        :root {
-            --primary: #4CAF50;
-            --secondary: #8D6E63;
-            --light-bg: #F9FBE7;
-            --dark-text: #2E2E2E;
-        }
-
-        h1 {
-            color: var(--primary);
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--light-bg);
-            color: var(--dark-text);
-        }
-
-        .card-header {
-            font-weight: 600;
-        }
-
-        .form-label {
-            font-weight: 500;
-        }
-
-        .field-validation-error {
-            color: #dc3545;
-            font-size: 0.875em;
-        }
-
-        .input-validation-error {
-            border-color: #dc3545;
-        }
-
-        .validation-summary-errors ul {
-            padding-left: 20px;
-            margin-bottom: 0;
-            color: #dc3545;
-        }
-
-        select:disabled {
-            background-color: #e9ecef;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="~/css/AIGoiY.css?v=@DateTime.Now.Ticks">
+    
 </head>
 <body>
     <div class="container mt-4 mb-5">
@@ -163,7 +119,7 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-sm-6">
                                     <label asp-for="ByproductQuantity" class="form-label"></label> <span class="text-danger">*</span>
-                                    <input asp-for="ByproductQuantity" type="number" step="any" class="form-control" placeholder="Nhập số lượng" min="0.01">
+                                    <input asp-for="ByproductQuantity" type="number" id="KhoiLuong" step="any" class="form-control" placeholder="Nhập khối lượng" min="0.01">
                                     <span asp-validation-for="ByproductQuantity" class="text-danger field-validation-error"></span>
                                 </div>
                                 <div class="col-sm-6">
@@ -172,6 +128,21 @@
                                         <option selected disabled value="">Chọn ĐVT...</option>
                                     </select>
                                     <span asp-validation-for="ByproductUnit" class="text-danger field-validation-error"></span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="MoistureInput" class="form-label">Độ ẩm ước tính</label>
+                                <div class="input-group">
+                                    <input type="number" id="MoistureInput" name="MoisturePercentage" class="form-control"
+                                           placeholder="Nhập số (VD: 15)" min="0" max="100" step="0.1">
+                                    <span class="input-group-text">%</span>
+
+                                    <button class="btn btn-outline-secondary" type="button" title="Dự đoán độ ẩm qua ảnh" onclick="alert('Tính năng đang phát triển!')">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text text-muted" style="font-size: 0.85em;">
+                                    <i class="fas fa-info-circle"></i> Độ ẩm càng thấp, giá thu mua càng cao.
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -263,12 +234,206 @@
             </div>
         </form>
     </div>
+    <!-- AI Assistant Bubble -->
+    <div id="ai-assistant" class="ai-assistant">
+        <div class="ai-message" id="aiMessage">
+            Chào bạn! Nhập đủ thông tin để tôi giúp bạn định giá nhé.
+        </div>
+
+        <div class="ai-circle idle" id="aiCircle">
+            <i class="fas fa-robot"></i>
+        </div>
+    </div>
 
     @* --- SCRIPTS --- *@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places"></script>
 
     @await Html.PartialAsync("_ValidationScriptsPartial") @* Script validation *@
+    @* AI gọi ý *@
+    <script>
+        const aiCircle = document.getElementById("aiCircle");
+        const aiMessage = document.getElementById("aiMessage");
+        const aiIcon = aiCircle.querySelector("i");
+
+        // Hàm lấy Text hiển thị của Dropdown (Dùng cho Địa chỉ)
+        function getSelectedText(elementId) {
+            const el = document.getElementById(elementId);
+            if (el && el.selectedIndex !== -1) {
+                return el.options[el.selectedIndex].text.trim();
+            }
+            return "";
+        }
+
+        async function calculatePrice() {
+            // 1. Chuyển sang trạng thái LOADING
+            aiCircle.className = "ai-circle loading";
+            aiIcon.className = "fas fa-sync-alt"; // Icon xoay
+            aiMessage.innerText = "Đang kết nối vệ tinh phân tích dữ liệu...";
+
+            // 2. Thu thập dữ liệu (Map đúng tên biến với C# PriceRequest)
+            const req = {
+                // ĐỊA CHỈ: Lấy TÊN (Text) để API bản đồ tìm được tọa độ
+                Province: getSelectedText("provinceSelectThuGom"),
+                District: getSelectedText("districtSelectThuGom"),
+                Ward: getSelectedText("wardSelectThuGom"),
+                Street: document.getElementById("SupplierStreet").value,
+
+                // SẢN PHẨM: Lấy MÃ (Value) để tra cứu trong DB (Quan trọng!)
+                nhomsanpham: document.getElementById("sanPhamSelect").value,
+
+                // CÁC THÔNG SỐ KHÁC
+                KhoiLuong: parseFloat(document.getElementById("KhoiLuong").value || 0),
+                DoAmThucTe: parseFloat(document.getElementById("MoistureInput").value || 0),
+                IsWet: document.getElementById("CharWet").checked,
+                IsBulky: document.getElementById("CharBulky").checked
+            };
+
+                   try {
+            // Gọi API
+            const res = await fetch("du-doan-gia", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(req)
+            });
+
+            // --- SỬA ĐOẠN NÀY ĐỂ BẮT LỖI SERVER ---
+            if (!res.ok) {
+                // Nếu Server trả về lỗi (400, 500), đọc nội dung lỗi đó ra
+                const errorText = await res.text();
+                throw new Error(errorText); // Ném lỗi này xuống phần catch
+            }
+
+            const data = await res.json();
+            console.log("Dữ liệu nhận được:", data); // Bật F12 xem cái này
+
+            // --- KIỂM TRA TÊN BIẾN (Case Sensitive) ---
+            // ASP.NET Core thường tự động đổi tên biến thành chữ thường (camelCase)
+            // Ví dụ: C# gửi "TenSanPham" -> JS nhận "tenSanPham"
+            // Nếu data.heSoMuaVu bị undefined, hãy thử đổi thành data.HeSoMuaVu
+            const heSoMuaVu = data.heSoMuaVu !== undefined ? data.heSoMuaVu : data.HeSoMuaVu;
+            const heSoDoAm = data.heSoDoAm !== undefined ? data.heSoDoAm : data.HeSoDoAm;
+            const tenSP = data.tenSanPham || data.TenSanPham;
+            const khoGan = data.khoGanNhat || data.KhoGanNhat;
+            const quangDuong = data.quangDuong || data.QuangDuong;
+            const phiShip = data.phiVanChuyen || data.PhiVanChuyen;
+            const tongTien = data.totalPrice || data.TotalPrice;
+
+            // 3. Có kết quả -> Trở về trạng thái ACTIVE
+            aiCircle.className = "ai-circle ai-glow";
+            aiIcon.className = "fas fa-check-circle";
+
+            const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+
+            // Logic hiển thị Mùa vụ
+            let muaVuText = "";
+            if (heSoMuaVu > 1)
+                muaVuText = `<span class="text-success fw-bold">Trái mùa (Tăng giá <i class="fas fa-arrow-up"></i>)</span>`;
+            else if (heSoMuaVu < 1)
+                muaVuText = `<span class="text-warning fw-bold">Chính vụ (Giảm nhẹ <i class="fas fa-arrow-down"></i>)</span>`;
+            else
+                muaVuText = `<span class="text-secondary">Bình ổn</span>`;
+
+            // Logic hiển thị Độ ẩm
+            let doAmText = "";
+            if (heSoDoAm < 1)
+                doAmText = `<span class="text-danger">Ẩm cao (Trừ ${(100 - heSoDoAm * 100).toFixed(1)}%)</span>`;
+            else if (heSoDoAm > 1)
+                doAmText = `<span class="text-success">Khô tốt (Thưởng ${(heSoDoAm * 100 - 100).toFixed(1)}%)</span>`;
+            else
+                doAmText = `Đạt chuẩn (15%)`;
+
+            // Render HTML
+            aiMessage.innerHTML = `
+                <div style="text-align: left; min-width: 250px; font-size: 0.9rem;">
+                    <div class="border-bottom pb-2 mb-2 fw-bold text-primary">
+                        <i class="fas fa-robot"></i> AI Định Giá Chi Tiết
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Sản phẩm:</span>
+                        <span class="fw-bold">${tenSP || 'Unknown'}</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="fas fa-cloud-sun"></i> Mùa vụ:</span>
+                        <small>${muaVuText}</small>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="fas fa-tint"></i> Độ ẩm:</span>
+                        <small>${doAmText}</small>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-1 text-muted">
+                        <span><i class="fas fa-truck"></i> Ship (${quangDuong}km):</span>
+                        <span>- ${fmt.format(phiShip)}</span>
+                    </div>
+
+                    <div class="mt-2 pt-2 border-top border-secondary text-center bg-light rounded py-2">
+                        <span class="text-muted small">Giá thu mua ước tính:</span><br>
+                        <span class="text-success fw-bold fs-5">${fmt.format(tongTien)}</span>
+                    </div>
+
+                    <div class="text-center mt-1">
+                        <small class="text-muted" style="font-size: 0.75rem">Kho: ${khoGan}</small>
+                    </div>
+                </div>
+            `;
+
+        } catch (err) {
+            console.error(err);
+            aiCircle.className = "ai-circle idle";
+            aiIcon.className = "fas fa-exclamation-triangle";
+
+            // --- HIỂN THỊ LỖI THỰC SỰ RA MÀN HÌNH ---
+            // Dòng này giúp bạn biết chính xác lỗi gì
+            aiMessage.innerText = "Lỗi: " + err.message;
+        }
+        }
+
+        function checkConditions() {
+            // Lấy giá trị các trường
+            const loai = document.getElementById("loaiSanPhamSelect")?.value;
+            const sanpham = document.getElementById("sanPhamSelect")?.value;
+            const khoiLuong = document.getElementById("KhoiLuong")?.value;
+            const province = document.getElementById("provinceSelectThuGom")?.value;
+            const district = document.getElementById("districtSelectThuGom")?.value;
+            const ward = document.getElementById("wardSelectThuGom")?.value;
+            const street = document.getElementById("SupplierStreet")?.value;
+            const moisture = document.getElementById("MoistureInput")?.value;
+
+            // Kiểm tra xem đã nhập đủ chưa
+            const isValid = loai && sanpham && khoiLuong && province && district && ward && street && moisture;
+
+            if (!isValid) {
+                aiCircle.className = "ai-circle idle";
+                aiIcon.className = "fas fa-robot";
+                aiMessage.innerText = "Bạn cần nhập đủ: Địa chỉ, Sản phẩm & Độ ẩm.";
+                return false;
+            }
+
+            // Nếu đủ điều kiện
+            aiCircle.className = "ai-circle ai-glow";
+            aiIcon.className = "fas fa-hand-holding-dollar";
+            aiMessage.innerText = "Dữ liệu đã đủ! Bấm vào tôi để định giá.";
+            return true;
+        }
+
+        // Gán sự kiện change cho tất cả input/select
+        document.querySelectorAll("input, select").forEach(el => {
+            el.addEventListener("change", checkConditions);
+        });
+
+        // Sự kiện click vào AI
+        aiCircle.addEventListener("click", () => {
+            if (checkConditions()) {
+                calculatePrice();
+            }
+        });
+    </script>
+
 
     @* Script AJAX cho dropdown địa chỉ VÀ sản phẩm *@
     <script>
@@ -398,6 +563,6 @@
 
         });
     </script>
-
+   
 </body>
 </html>

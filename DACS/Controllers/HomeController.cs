@@ -1,11 +1,9 @@
 using System.ComponentModel;
 using System.Configuration;
 using System.Diagnostics;
-
 using System.Security.Claims;
 using DACS.Areas.KhachHang.Controllers;
 using DACS.Models;
-
 using DACS.Models.ViewModels;
 using DACS.Services;
 using FuzzySharp;
@@ -61,12 +59,17 @@ namespace DACS.Controllers
 
 
 
-        public IActionResult Index()
-
+        public async Task<IActionResult> Index()
         {
+            // Lấy 4 sản phẩm mới nhất để hiển thị ra trang chủ
+            // Include DonViTinh để hiển thị (ví dụ: 500đ/kg)
+            var products = await _context.SanPhams
+                                         .Include(sp => sp.DonViTinh)
+                                         .OrderByDescending(sp => sp.NgayTao) // Sắp xếp mới nhất (cần đảm bảo model SanPham có NgayTao)
+                                         .Take(4) // Chỉ lấy 4 sản phẩm
+                                         .ToListAsync();
 
-            return View();
-
+            return View(products); // Truyền danh sách sản phẩm sang View
         }
 
         public IActionResult Introduction()

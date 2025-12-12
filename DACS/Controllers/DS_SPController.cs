@@ -253,53 +253,61 @@ namespace DACS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SubmitReview(ChiTietDanhGia reviewInput)
         {
+            // 1. Kiểm tra đăng nhập
             if (!User.Identity.IsAuthenticated)
             {
                 TempData["ReviewMessage"] = "Lỗi: Bạn cần đăng nhập để gửi đánh giá.";
                 return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
             }
 
-            if (!int.TryParse(reviewInput.MucDoHaiLong, out int rating) || rating < 1 || rating > 5)
+            // 2. TỰ ĐỘNG LẤY KHÁCH HÀNG TỪ USER (Thay vì chờ form gửi lên)
+            var userId = _userManager.GetUserId(User);
+            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(k => k.UserId == userId);
+
+            if (khachHang == null)
             {
-                ModelState.AddModelError("MucDoHaiLong", "Mức độ hài lòng không hợp lệ.");
-            }
-
-            if (ModelState.IsValid)
-            {
-                var productExists = await _context.SanPhams.AnyAsync(p => p.M_SanPham == reviewInput.M_SanPham);
-                if (!productExists)
-                {
-                    TempData["ReviewMessage"] = "Lỗi: Sản phẩm không tồn tại.";
-                    return RedirectToAction("Index", "Home");
-                }
-
-                var customerExists = await _context.KhachHangs.AnyAsync(k => k.M_KhachHang == reviewInput.M_KhachHang);
-                if (!customerExists)
-                {
-                    TempData["ReviewMessage"] = "Lỗi: Khách hàng không tồn tại.";
-                    return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
-                }
-
-                bool alreadyReviewed = await _context.ChiTietDanhGias
-                    .AnyAsync(dg => dg.M_SanPham == reviewInput.M_SanPham &&
-                                    dg.M_KhachHang == reviewInput.M_KhachHang);
-
-                if (alreadyReviewed)
-                {
-                    TempData["ReviewMessage"] = "Thông báo: Bạn đã đánh giá sản phẩm này rồi.";
-                    return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
-                }
-
-                reviewInput.NgayDanhGia = DateTime.UtcNow;
-                _context.ChiTietDanhGias.Add(reviewInput);
-                await _context.SaveChangesAsync();
-
-                TempData["ReviewMessage"] = "Cảm ơn bạn đã gửi đánh giá!";
+                TempData["ReviewMessage"] = "Lỗi: Tài khoản chưa có thông tin khách hàng.";
                 return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
             }
 
-            TempData["ReviewMessage"] = "Đánh giá không hợp lệ. Vui lòng kiểm tra lại thông tin.";
+            // Gán M_KhachHang tìm được vào model
+            reviewInput.M_KhachHang = khachHang.M_KhachHang;
+
+            // 3. Validate Mức độ hài lòng
+            if (!int.TryParse(reviewInput.MucDoHaiLong, out int rating) || rating < 1 || rating > 5)
+            {
+                TempData["ReviewMessage"] = "Lỗi: Vui lòng chọn số sao (1-5).";
+                return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
+            }
+
+            // 4. Kiểm tra sản phẩm
+            var productExists = await _context.SanPhams.AnyAsync(p => p.M_SanPham == reviewInput.M_SanPham);
+            if (!productExists) return NotFound();
+
+            // 5. Kiểm tra đã đánh giá chưa
+            bool alreadyReviewed = await _context.ChiTietDanhGias
+                .AnyAsync(dg => dg.M_SanPham == reviewInput.M_SanPham &&
+                                dg.M_KhachHang == reviewInput.M_KhachHang);
+
+            if (alreadyReviewed)
+            {
+                TempData["ReviewMessage"] = "Bạn đã đánh giá sản phẩm này rồi.";
+                return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
+            }
+
+            // 6. Lưu
+            // Bỏ qua check ModelState cho các field navigation không cần thiết
+            ModelState.Remove("KhachHang");
+            ModelState.Remove("SanPham");
+
+            reviewInput.NgayDanhGia = DateTime.UtcNow;
+            _context.ChiTietDanhGias.Add(reviewInput);
+            await _context.SaveChangesAsync();
+
+            TempData["ReviewMessage"] = "Cảm ơn bạn đã đánh giá!";
             return RedirectToAction("CT_SP", new { id = reviewInput.M_SanPham });
         }
+
+
     }
 }

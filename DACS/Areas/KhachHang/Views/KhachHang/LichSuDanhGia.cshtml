@@ -1,0 +1,159 @@
+﻿@model IEnumerable<DACS.Models.ChiTietDanhGia>
+
+@{
+    ViewData["Title"] = "Lịch sử đánh giá";
+    Layout = "~/Areas/KhachHang/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4 account-section">
+    <div class="row">
+        @* --- CỘT TRÁI: MENU TÀI KHOẢN --- *@
+        <div class="col-lg-3 mb-4 mb-lg-0">
+            <div class="account-menu list-group shadow-sm">
+
+                @* 1. Tổng quan *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active" : "")">
+                    <i class="fas fa-tachometer-alt fa-fw me-2"></i> Tổng quan
+                </a>
+
+                @* 2. Hồ sơ cá nhân *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "HoSoCaNhan" ? "active" : "")">
+                    <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
+                </a>
+
+                @* 3. Lịch sử Đơn hàng *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDonHang" ? "active" : "")">
+                    <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
+                </a>
+
+                @* 4. Lịch sử Thu gom *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuYeuCauThuGom"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuYeuCauThuGom" ? "active" : "")">
+                    <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
+                </a>
+
+                @* --- PHẦN ĐÁNH GIÁ --- *@
+
+                @* 5. Chờ đánh giá *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "SanPhamChoDanhGia" ? "active" : "")">
+                    <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
+                </a>
+
+                @* 6. Lịch sử đánh giá (ACTIVE) *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDanhGia" ? "active" : "")">
+                    <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
+                </a>
+
+                @* --------------------------- *@
+
+                @* 7. Đổi mật khẩu *@
+                <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword"
+                   class="list-group-item list-group-item-action">
+                    <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
+                </a>
+
+                @* 8. Đăng xuất *@
+                <div class="list-group-item p-0">
+                    <a href="/home/index" class="btn btn-light w-100 text-start text-danger border-0 rounded-0 py-3 px-3">
+                        <i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @* --- CỘT PHẢI: NỘI DUNG CHÍNH --- *@
+        <div class="col-lg-9">
+            <div class="account-content">
+                <h4 class="mb-4 text-success"><i class="fas fa-history me-2"></i>Lịch sử đánh giá sản phẩm</h4>
+
+                @if (!Model.Any())
+                {
+                    <div class="text-center py-5 bg-light rounded">
+                        <i class="far fa-comment-dots text-muted fa-3x mb-3"></i>
+                        <p class="text-muted mb-3">Bạn chưa đánh giá sản phẩm nào.</p>
+                        <a href="/KhachHang/KhachHang/SanPhamChoDanhGia" class="btn btn-outline-primary">
+                            Xem sản phẩm chờ đánh giá
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    @* Sử dụng class dashboard-card để đồng bộ *@
+                    <div class="card dashboard-card border-0 shadow-sm">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th class="py-3 ps-4" style="width: 35%">Sản phẩm</th>
+                                            <th class="py-3 text-center" style="width: 15%">Đánh giá</th>
+                                            <th class="py-3" style="width: 35%">Nội dung nhận xét</th>
+                                            <th class="py-3 text-end pe-4" style="width: 15%">Ngày gửi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model)
+                                        {
+                                            // Xử lý chuyển đổi số sao
+                                            int soSao = 0;
+                                            int.TryParse(item.MucDoHaiLong, out soSao);
+
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="d-flex align-items-center">
+                                                        <img src="@(item.SanPham?.AnhSanPham ?? "/images/no-image.png")"
+                                                             alt="@item.SanPham?.TenSanPham"
+                                                             class="rounded border"
+                                                             style="width: 60px; height: 60px; object-fit: cover; margin-right: 15px;" />
+                                                        <div>
+                                                            <a href="/DS_SP/CT_SP/@item.M_SanPham" class="fw-bold text-decoration-none text-dark">
+                                                                @(item.SanPham?.TenSanPham ?? "Sản phẩm đã xóa")
+                                                            </a>
+                                                            <br />
+                                                            <small class="text-muted">Mã: @item.M_SanPham</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="text-warning small mb-1">
+                                                        @for (int i = 1; i <= 5; i++)
+                                                        {
+                                                            if (i <= soSao)
+                                                            {
+                                                                <i class="fas fa-star"></i>
+                                                            }
+                                                            else
+                                                            {
+                                                                <i class="far fa-star text-secondary" style="opacity: 0.3;"></i>
+                                                            }
+                                                        }
+                                                    </div>
+                                                    <span class="badge bg-light text-dark border">@soSao/5</span>
+                                                </td>
+                                                <td>
+                                                    <p class="mb-0 text-break text-muted small">
+                                                        <i class="fas fa-quote-left me-1 opacity-25"></i>
+                                                        @item.MoTa_DanhGia
+                                                    </p>
+                                                </td>
+                                                <td class="text-end pe-4 text-muted">
+                                                    <span class="d-block fw-bold small">@item.NgayDanhGia.ToString("dd/MM/yyyy")</span>
+                                                    <span class="small">@item.NgayDanhGia.ToString("HH:mm")</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

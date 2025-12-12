@@ -16,7 +16,7 @@ namespace DACS.Models
 
         [StringLength(255)]
         public string CauTraLoi { get; set; }
-        
+
         public string? M_KhachHang { get; set; }
 
         [ForeignKey("M_KhachHang")]

@@ -80,5 +80,16 @@ namespace DACS.Models
         [StringLength(20)]
         [Display(Name = "Trạng thái xử lý")]
         public string TrangThaiXuLy { get; set; } = "MoiYeuCau";
+        [Display(Name = "Độ ẩm thực tế (%)")]
+        [Range(0, 100, ErrorMessage = "Độ ẩm phải nằm trong khoảng từ 0 đến 100.")]
+        public double DoAmThucTe { get; set; }
+
+        public double HeSoDoAm { get; set; }
+
+        public double HeSoMuaVu { get; set; }
+
+        public double PhiVanChuyen { get; set; }
+
+        public double DonGiaThuMua { get; set; }
     }
 }

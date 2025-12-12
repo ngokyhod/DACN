@@ -182,15 +182,15 @@ namespace DACS.Areas.QuanLyDH.Controllers
                     case "confirm":
                         if (donHang.TrangThai == StatusPendingDbValue || donHang.TrangThai == "Chưa xử lý")
                         {
-                            // <<< LOGIC MỚI: Trừ kho FIFO
+                            // --- SỬA: CHUYỂN TRỪ KHO LÊN ĐÂY ---
                             inventoryError = await ApplyInventoryChangesForOrderAsync(donHang, truKho: true);
                             if (inventoryError != null)
                             {
-                                // Nếu có lỗi (hết hàng), rollback và báo lỗi
                                 await transaction.RollbackAsync();
-                                TempData["ErrorMessage"] = $"Không thể xác nhận ĐH {donHang.M_DonHang}: {inventoryError}";
+                                TempData["ErrorMessage"] = $"Lỗi tồn kho: {inventoryError}";
                                 return RedirectToAction(nameof(Details), new { id = id });
                             }
+                            // ------------------------------------
 
                             actualNewStatusInDb = StatusConfirmedDbValue;
                             successMessagePart = "xác nhận và đã trừ tồn kho.";
@@ -217,8 +217,13 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         break;
 
                     case "complete":
-                        if (donHang.TrangThai == StatusShippingDbValue)
+                        // SỬA: Cho phép hoàn thành từ các trạng thái đang chạy
+                        if (donHang.TrangThai == StatusShippingDbValue ||
+                            donHang.TrangThai == StatusProcessingDbValue ||
+                            donHang.TrangThai == StatusConfirmedDbValue)
                         {
+                            // QUAN TRỌNG: KHÔNG GỌI TRỪ KHO Ở ĐÂY NỮA (VÌ ĐÃ TRỪ Ở CONFIRM RỒI)
+
                             actualNewStatusInDb = StatusCompletedDbValue;
                             successMessagePart = "hoàn thành.";
                             canUpdate = true;
@@ -226,23 +231,22 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         break;
 
                     case "cancel":
+                        // Logic hủy giữ nguyên, nó sẽ hoàn kho đúng vì ta đã trừ kho ở bước confirm.
                         if (donHang.TrangThai == StatusPendingDbValue || donHang.TrangThai == "Chưa xử lý")
                         {
-                            // Đơn hàng chưa xác nhận -> chưa trừ kho -> chỉ cần hủy
                             actualNewStatusInDb = StatusCancelledDbValue;
                             successMessagePart = "hủy (chưa trừ kho).";
                             canUpdate = true;
                         }
-                        else if (donHang.TrangThai == StatusConfirmedDbValue || donHang.TrangThai == StatusProcessingDbValue)
+                        else if (donHang.TrangThai == StatusConfirmedDbValue ||
+                                 donHang.TrangThai == StatusProcessingDbValue ||
+                                 donHang.TrangThai == StatusShippingDbValue) // Thêm Shipping vào để cho phép hủy khi đang giao
                         {
-                            // Đơn hàng đã xác nhận/xử lý -> đã trừ kho -> phải hoàn kho
-                            // <<< LOGIC MỚI: Hoàn kho (giả định)
-                            inventoryError = await ApplyInventoryChangesForOrderAsync(donHang, truKho: false);
+                            inventoryError = await ApplyInventoryChangesForOrderAsync(donHang, truKho: false); // Hoàn kho
                             if (inventoryError != null)
                             {
-                                // Vẫn cho hủy nhưng báo lỗi hoàn kho
-                                _logger.LogError("Lỗi khi hoàn kho cho ĐH {DonHangId}: {Error}", donHang.M_DonHang, inventoryError);
-                                successMessagePart = $"hủy. (CẢNH BÁO: Lỗi tự động hoàn kho: {inventoryError})";
+                                _logger.LogError("Lỗi hoàn kho: {Error}", inventoryError);
+                                successMessagePart = $"hủy. (Lỗi hoàn kho: {inventoryError})";
                             }
                             else
                             {
@@ -888,13 +892,30 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         // <<< ================= BẮT ĐẦU GỌI BLOCKCHAIN ================= >>>
                         try
                         {
-                            string txHash = await _blockchainService.GhiNhatKyAsync(
-                                lot.MaLoTonKho,        // Mã Lô (ví dụ: "L001")
-                                "XUẤT KHO",            // Trạng thái
-                                donHang.M_DonHang,     // Địa điểm (Mã Đơn Hàng)
-                                $"Trừ {soLuongLayTuLoNay.ToString("N2")}kg cho ĐH" // Ghi chú (Metadata)
+
+                            string metadata = $"Đơn hàng {donHang.M_DonHang} - {donHang.TrangThai} - " +
+                      $"{donHang.M_PhuongThuc} - {donHang.TotalPrice}";
+
+                            dynamic result = await _blockchainService.GhiNhatKyAsync(
+                                donHang.M_DonHang,
+                                donHang.TrangThai,
+                                donHang.ShippingAddress,
+                                metadata
                             );
-                            _logger.LogInformation("ĐÃ GHI BLOCKCHAIN (Xuất Kho) cho Lô {MaLo}, TxHash: {TxHash}", lot.MaLoTonKho, txHash);
+
+                          
+                            // === CHỈ LƯU SQL KHI BLOCKCHAIN THÀNH CÔNG ===
+                            var log = new BlockchainTransaction
+                            {
+                                MaDonHang = donHang.M_DonHang,
+                                TrangThai = donHang.TrangThai,
+                                DiaChiGiaoHang = donHang.ShippingAddress,
+                                Metadata = metadata,
+                                TxHash = "nuh",
+                            };
+
+                            _context.BlockchainTransaction.Add(log);
+                            await _context.SaveChangesAsync();
                         }
                         catch (Exception ex)
                         {
@@ -927,6 +948,7 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         // Không return lỗi, vẫn cho hủy đơn
                     }
                 }
+
             }
 
             return null; // Thành công

@@ -111,6 +111,7 @@
             <ul class="nav flex-column">
                 <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyDH" asp-action="Index" class="nav-link "><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
                 <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link active"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh Toán</a></li>
+                <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyData" asp-action="PublicTrace" class="nav-link"><i class="fas fa-link"></i> Quản lý Data</a></li>
                 <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })" method="post" id="logoutForm_sidebar_index" class="mt-3">
                     @* Moved mt-3 to form *@
                     <button type="submit" class="list-group-item list-group-item-action text-danger border-0 bg-transparent p-0 w-100 text-start">

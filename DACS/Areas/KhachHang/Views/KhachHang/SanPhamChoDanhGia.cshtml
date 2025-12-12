@@ -1,0 +1,193 @@
+﻿@model IEnumerable<DACS.Models.SanPham>
+
+@{
+    ViewData["Title"] = "Sản phẩm chờ đánh giá";
+    Layout = "~/Areas/KhachHang/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4 account-section">
+    <div class="row">
+        @* --- CỘT TRÁI: MENU TÀI KHOẢN (Đồng bộ với Index) --- *@
+        <div class="col-lg-3 mb-4 mb-lg-0">
+            <div class="account-menu list-group shadow-sm">
+
+                @* 1. Tổng quan *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active" : "")">
+                    <i class="fas fa-tachometer-alt fa-fw me-2"></i> Tổng quan
+                </a>
+
+                @* 2. Hồ sơ cá nhân *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "HoSoCaNhan" ? "active" : "")">
+                    <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
+                </a>
+
+                @* 3. Lịch sử Đơn hàng *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDonHang" ? "active" : "")">
+                    <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
+                </a>
+
+                @* 4. Lịch sử Thu gom *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuYeuCauThuGom"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuYeuCauThuGom" ? "active" : "")">
+                    <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
+                </a>
+
+                @* --- PHẦN ĐÁNH GIÁ --- *@
+
+                @* 5. Chờ đánh giá *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "SanPhamChoDanhGia" ? "active" : "")">
+                    <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
+                </a>
+
+                @* 6. Lịch sử đánh giá *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDanhGia" ? "active" : "")">
+                    <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
+                </a>
+
+                @* --------------------------- *@
+
+                @* 7. Đổi mật khẩu *@
+                <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword"
+                   class="list-group-item list-group-item-action">
+                    <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
+                </a>
+
+                @* 8. Đăng xuất *@
+                <div class="list-group-item p-0">
+                    <a href="/home/index" class="btn btn-light w-100 text-start text-danger border-0 rounded-0 py-3 px-3">
+                        <i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @* --- CỘT PHẢI: NỘI DUNG CHÍNH --- *@
+        <div class="col-lg-9">
+            <div class="account-content">
+                <h4 class="mb-4">Sản phẩm cần đánh giá</h4>
+
+                @if (TempData["Message"] != null)
+                {
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        @TempData["Message"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if (!Model.Any())
+                {
+                    <div class="text-center py-5 bg-light rounded">
+                        <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                        <p class="mb-0 text-muted">Bạn đã đánh giá hết các sản phẩm đã mua.</p>
+                        <a href="/" class="btn btn-link">Tiếp tục mua sắm</a>
+                    </div>
+                }
+                else
+                {
+                    @* Bọc bảng trong card để giống style Dashboard *@
+                    <div class="card dashboard-card border-0 shadow-sm">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th class="ps-4 py-3">Hình ảnh</th>
+                                            <th class="py-3">Tên sản phẩm</th>
+                                            <th class="text-end pe-4 py-3">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model)
+                                        {
+                                            <tr>
+                                                <td class="ps-4" style="width: 100px;">
+                                                    <img src="@item.AnhSanPham" class="rounded border" style="width: 70px; height: 70px; object-fit: cover;" alt="@item.TenSanPham" />
+                                                </td>
+                                                <td>
+                                                    <a href="/DS_SP/CT_SP/@item.M_SanPham" target="_blank" class="fw-bold text-dark text-decoration-none">
+                                                        @item.TenSanPham
+                                                    </a>
+                                                    <br />
+                                                    <small class="text-muted">Mã SP: @item.M_SanPham</small>
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                    <button type="button" class="btn btn-sm btn-primary btn-review shadow-sm"
+                                                            data-id="@item.M_SanPham"
+                                                            data-name="@item.TenSanPham"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#reviewModal">
+                                                        <i class="fas fa-pen me-1"></i> Viết đánh giá
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* --- MODAL ĐÁNH GIÁ (Giữ nguyên logic) --- *@
+<div class="modal fade" id="reviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="GuiDanhGia" method="post">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Đánh giá: <span id="modalProductName" class="fw-bold"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="m_SanPham" id="modalProductId" />
+
+                    <div class="mb-3 text-center">
+                        <label class="form-label fw-bold">Mức độ hài lòng</label>
+                        <select name="mucDoHaiLong" class="form-select text-center border-primary" style="font-size: 1.1rem;">
+                            <option value="5">⭐⭐⭐⭐⭐ (Tuyệt vời)</option>
+                            <option value="4">⭐⭐⭐⭐ (Tốt)</option>
+                            <option value="3">⭐⭐⭐ (Bình thường)</option>
+                            <option value="2">⭐⭐ (Tệ)</option>
+                            <option value="1">⭐ (Rất tệ)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nhận xét của bạn:</label>
+                        <textarea name="moTa_DanhGia" class="form-control" rows="4" required placeholder="Chia sẻ cảm nhận về chất lượng sản phẩm..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-success px-4">Gửi đánh giá</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Script để truyền ID và Tên sản phẩm vào Modal khi bấm nút
+        var reviewModal = document.getElementById('reviewModal');
+        reviewModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var productId = button.getAttribute('data-id');
+            var productName = button.getAttribute('data-name');
+
+            var modalProductIdInput = reviewModal.querySelector('#modalProductId');
+            var modalProductNameSpan = reviewModal.querySelector('#modalProductName');
+
+            modalProductIdInput.value = productId;
+            modalProductNameSpan.textContent = productName;
+        });
+    </script>
+}

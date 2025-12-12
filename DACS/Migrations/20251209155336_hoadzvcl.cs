@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DACS.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdatePhieuXuat_Va_LoTonKho : Migration
+    public partial class hoadzvcl : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -51,6 +51,24 @@ namespace DACS.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "BlockchainTransaction",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MaDonHang = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    TrangThai = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    DiaChiGiaoHang = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    Metadata = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    TxHash = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BlockchainTransaction", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -125,7 +143,9 @@ namespace DACS.Migrations
                     DiaChi = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false),
                     SucChuaTomTat = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     TrangThai = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    TenLoaiKho = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false)
+                    TenLoaiKho = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Lat = table.Column<double>(type: "float", nullable: false),
+                    Lng = table.Column<double>(type: "float", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -358,8 +378,11 @@ namespace DACS.Migrations
                     TrangThai = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     NgayTao = table.Column<DateTime>(type: "datetime2", nullable: false),
                     AnhSanPham = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    SoLuong = table.Column<int>(type: "int", nullable: false),
-                    HanSuDung = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    HanSuDung = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ThangBatDauVu = table.Column<int>(type: "int", nullable: false),
+                    ThangKetThucVu = table.Column<int>(type: "int", nullable: false),
+                    HeSoGiaTrongMua = table.Column<double>(type: "float", nullable: false),
+                    HeSoGiaTraiMua = table.Column<double>(type: "float", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -465,7 +488,7 @@ namespace DACS.Migrations
                         column: x => x.M_SanPham,
                         principalTable: "SanPhams",
                         principalColumn: "M_SanPham",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.NoAction);
                 });
 
             migrationBuilder.CreateTable(
@@ -551,6 +574,26 @@ namespace DACS.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ChatHistory", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ChatMessages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SenderId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ReceiverId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SenderName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Message = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    SentTime = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    M_KhachHang = table.Column<string>(type: "nvarchar(10)", nullable: true),
+                    IsFromAdmin = table.Column<bool>(type: "bit", nullable: false),
+                    ImageUrl = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ChatMessages", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -853,6 +896,11 @@ namespace DACS.Migrations
                     DanhSachHinhAnh = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     MaLoTonKho = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
                     TrangThaiXuLy = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    DoAmThucTe = table.Column<double>(type: "float", nullable: false),
+                    HeSoDoAm = table.Column<double>(type: "float", nullable: false),
+                    HeSoMuaVu = table.Column<double>(type: "float", nullable: false),
+                    PhiVanChuyen = table.Column<double>(type: "float", nullable: false),
+                    DonGiaThuMua = table.Column<double>(type: "float", nullable: false),
                     DonHangM_DonHang = table.Column<string>(type: "nvarchar(10)", nullable: true),
                     QuanLyM_QuanLy = table.Column<string>(type: "nvarchar(10)", nullable: true)
                 },
@@ -942,6 +990,11 @@ namespace DACS.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_ChatHistory_M_KhachHang",
                 table: "ChatHistory",
+                column: "M_KhachHang");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatMessages_M_KhachHang",
+                table: "ChatMessages",
                 column: "M_KhachHang");
 
             migrationBuilder.CreateIndex(
@@ -1174,6 +1227,13 @@ namespace DACS.Migrations
                 principalColumn: "M_KhachHang");
 
             migrationBuilder.AddForeignKey(
+                name: "FK_ChatMessages_KhachHangs_M_KhachHang",
+                table: "ChatMessages",
+                column: "M_KhachHang",
+                principalTable: "KhachHangs",
+                principalColumn: "M_KhachHang");
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_ChiTietDanhGias_KhachHangs_M_KhachHang",
                 table: "ChiTietDanhGias",
                 column: "M_KhachHang",
@@ -1239,10 +1299,16 @@ namespace DACS.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "BlockchainTransaction");
+
+            migrationBuilder.DropTable(
                 name: "CauHoiThuongGap");
 
             migrationBuilder.DropTable(
                 name: "ChatHistory");
+
+            migrationBuilder.DropTable(
+                name: "ChatMessages");
 
             migrationBuilder.DropTable(
                 name: "ChiTietDanhGias");

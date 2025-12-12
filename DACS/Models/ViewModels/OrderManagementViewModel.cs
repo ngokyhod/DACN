@@ -1,6 +1,7 @@
 ﻿// File: Areas/Owner/Models/OrderViewModel.cs (hoặc gộp vào OrderManagementViewModel.cs)
 using System;
 using System.Collections.Generic;
+using DACS.Models.Blockchain;
 using Microsoft.AspNetCore.Mvc.Rendering; // Cần cho SelectListItem
 
 namespace DACS.Areas.Owner.Models
@@ -55,6 +56,7 @@ namespace DACS.Areas.Owner.Models
             Orders = new List<OrderViewModel>();
             OrderStatusOptions = new List<SelectListItem>();
             PaymentStatusOptions = new List<SelectListItem>();
+
         }
     }
 }

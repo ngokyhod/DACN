@@ -96,6 +96,47 @@ namespace DACS.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("DACS.Models.BlockchainTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DiaChiGiaoHang")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaDonHang")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Metadata")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("TrangThai")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TxHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BlockchainTransaction");
+                });
+
             modelBuilder.Entity("DACS.Models.CauHoiThuongGap", b =>
                 {
                     b.Property<int>("Id")
@@ -402,11 +443,23 @@ namespace DACS.Migrations
                     b.Property<string>("DanhSachHinhAnh")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<double>("DoAmThucTe")
+                        .HasColumnType("float");
+
+                    b.Property<double>("DonGiaThuMua")
+                        .HasColumnType("float");
+
                     b.Property<string>("DonHangM_DonHang")
                         .HasColumnType("nvarchar(10)");
 
                     b.Property<decimal?>("GiaTriMongMuon")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<double>("HeSoDoAm")
+                        .HasColumnType("float");
+
+                    b.Property<double>("HeSoMuaVu")
+                        .HasColumnType("float");
 
                     b.Property<string>("M_DonViTinh")
                         .IsRequired()
@@ -434,6 +487,9 @@ namespace DACS.Migrations
 
                     b.Property<string>("MoTa")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("PhiVanChuyen")
+                        .HasColumnType("float");
 
                     b.Property<string>("QuanLyM_QuanLy")
                         .HasColumnType("nvarchar(10)");
@@ -709,6 +765,12 @@ namespace DACS.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
+                    b.Property<double>("Lat")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Lng")
+                        .HasColumnType("float");
+
                     b.Property<string>("SucChuaTomTat")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -955,6 +1017,12 @@ namespace DACS.Migrations
                     b.Property<DateTime>("HanSuDung")
                         .HasColumnType("datetime2");
 
+                    b.Property<double>("HeSoGiaTraiMua")
+                        .HasColumnType("float");
+
+                    b.Property<double>("HeSoGiaTrongMua")
+                        .HasColumnType("float");
+
                     b.Property<string>("M_DonViTinh")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -976,6 +1044,12 @@ namespace DACS.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ThangBatDauVu")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ThangKetThucVu")
+                        .HasColumnType("int");
 
                     b.Property<string>("TrangThai")
                         .IsRequired()

@@ -32,9 +32,11 @@ namespace DACS.Models // Hoặc namespace phù hợp
         [Required]
         [StringLength(100)]
         public string TenLoaiKho { get; set; }
-        // --- Thêm các thuộc tính hoặc quan hệ khác nếu cần ---
-        // Ví dụ: Liên kết đến các bản ghi tồn kho trong kho này
-        // public virtual ICollection<TonKho> TonKhos { get; set; } = new List<TonKho>();
+        [Range(-90, 90, ErrorMessage = "Vĩ độ (Lat) không hợp lệ.")]
+        public double Lat { get; set; }
+
+        [Range(-180, 180, ErrorMessage = "Kinh độ (Lng) không hợp lệ.")]
+        public double Lng { get; set; }
     }
 
     // --- Định nghĩa các hằng số trạng thái kho ---

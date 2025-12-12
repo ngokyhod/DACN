@@ -9,7 +9,9 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using Nethereum.ABI.FunctionEncoding.Attributes; // <<< THÊM USING NÀY
-using Nethereum.Hex.HexTypes; // <<< THÊM USING NÀY
+using Nethereum.Hex.HexTypes;
+using Nethereum.RPC.Eth.DTOs; // <<< THÊM USING NÀY
+using System.Linq;
 
 namespace DACS.Services
 {
@@ -23,14 +25,16 @@ namespace DACS.Services
 
         // (ABI của bạn giữ nguyên)
         private readonly string _abi = @"[
+	
+	
 	{
 		""anonymous"": false,
 		""inputs"": [
 			{
 				""indexed"": true,
-				""internalType"": ""string"",
+				""internalType"": ""bytes32"",
 				""name"": ""lotId"",
-				""type"": ""string""
+				""type"": ""bytes32""
 			},
 			{
 				""indexed"": false,
@@ -48,6 +52,12 @@ namespace DACS.Services
 				""indexed"": false,
 				""internalType"": ""string"",
 				""name"": ""location"",
+				""type"": ""string""
+			},
+			{
+				""indexed"": false,
+				""internalType"": ""string"",
+				""name"": ""metadata"",
 				""type"": ""string""
 			}
 		],
@@ -140,6 +150,8 @@ namespace DACS.Services
 		""stateMutability"": ""view"",
 		""type"": ""function""
 	}
+
+
 ]";
 
         public BlockchainService(IConfiguration configuration, ILogger<BlockchainService> logger)
@@ -161,62 +173,96 @@ namespace DACS.Services
             // <<< ================= KẾT THÚC THÊM ================= >>>
         }
 
-        public async Task<string> GhiNhatKyAsync(string lotId, string status, string location, string metadata)
+        public async Task<object> GhiNhatKyAsync(
+     string lotId, string status, string location, string metadata)
         {
             try
             {
                 var addFunction = _contract.GetFunction("addHistory");
 
-                // 🧮 Ước lượng gas
-                var gas = await addFunction.EstimateGasAsync(_account.Address, null, null, lotId, status, location, metadata);
-                // ⚙️ Cộng thêm 15% gas buffer cho an toàn
+                // Estimate gas
+                var gas = await addFunction.EstimateGasAsync(
+                    _account.Address, null, null, lotId, status, location, metadata);
+
                 gas = new HexBigInteger(gas.Value + (gas.Value / 6));
 
-                // 🚀 Gửi giao dịch
-                var txHash = await addFunction.SendTransactionAsync(_account.Address, gas, null, lotId, status, location, metadata);
-                _logger.LogInformation($"✅ Giao dịch đã gửi (Sent). TxHash = {txHash}");
-
-                // 🕓 CHỜ XÁC NHẬN
+                // Send TX và nhận hash ngay lập tức
+                var txHash = await addFunction.SendTransactionAsync(
+                    _account.Address, gas, null, lotId, status, location, metadata);
                 var receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(txHash);
-                int retry = 0;
-                while (receipt == null && retry < 10)
-                {
-                    await Task.Delay(2000);
-                    receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(txHash);
-                    retry++;
-                }
+                
 
-                // <<< ================= THÊM KIỂM TRA STATUS ================= >>>
-                if (receipt == null)
+
+                if (receipt != null && receipt.Status.Value == 1)
                 {
-                    _logger.LogError("❌ GIAO DỊCH THẤT BẠI: Không nhận được Receipt (Timeout). TxHash: {TxHash}", txHash);
-                    throw new Exception($"Transaction receipt timeout for {txHash}.");
-                }
-                else if (receipt.Status.Value == 0) // <<< KIỂM TRA REVERT
-                {
-                    _logger.LogError("❌ GIAO DỊCH THẤT BẠI (Reverted). Block: {BlockNumber}. TxHash: {TxHash}", receipt.BlockNumber.Value, txHash);
-                    throw new Exception($"Transaction Reverted: {txHash}. Lỗi Gas Limit hoặc Logic Hợp đồng.");
+                    Console.WriteLine("TX mined thành công!");
                 }
                 else
                 {
-                    // (receipt.Status.Value == 1) -> THÀNH CÔNG
-                    _logger.LogInformation($"📬 Giao dịch đã xác nhận THÀNH CÔNG trong block {receipt.BlockNumber.Value}");
+                    Console.WriteLine("TX chưa mined hoặc thất bại");
                 }
-                // <<< ================= KẾT THÚC SỬA ================= >>>
 
-                return txHash;
+                return new
+                {
+                    success = true,
+                    TxHash = txHash
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi khi ghi Blockchain.");
-                throw;
+                return new
+                {
+                    success = false,
+                    message = ex.Message
+                };
             }
         }
 
-        // <<< ================= SỬA LẠI HÀM NÀY ================= >>>
-        public async Task<List<TraceEventDTO>> GetHistoryAsync(string maLo)
+
+        public async Task<object> GetHistoryByTxHashAsync(string txHash)
         {
-            var result = new List<TraceEventDTO>();
+            try
+            {
+                var receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(txHash);
+                if (receipt == null)
+                    return new { success = false, message = "Không tìm thấy receipt" };
+
+                var eventHistory = _contract.GetEvent("HistoryAdded");
+                var decodedLogs = eventHistory.DecodeAllEventsForEvent<HistoryAddedEventDTO>(receipt.Logs.ToArray());
+
+                if (!decodedLogs.Any())
+                    return new { success = false, message = "Không tìm thấy event trong log" };
+
+                var evt = decodedLogs.First().Event;
+
+                return new
+                {
+                    success = true,
+                    data = new
+                    {
+                        txHash = txHash,
+                        block = receipt.BlockNumber.Value,
+                        lotId = evt.LotId,
+                        timestamp = evt.Timestamp,
+                        status = evt.Status,
+                        location = evt.Location,
+                        metadata = evt.Metadata
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                return new { success = false, message = ex.Message };
+            }
+        }
+
+
+
+
+        // <<< ================= SỬA LẠI HÀM NÀY ================= >>>
+        public async Task<List<HistoryAddedEventDTO>> GetHistoryAsync(string maLo)
+        {
+            var result = new List<HistoryAddedEventDTO>();
             try
             {
                 var getCountFunction = _contract.GetFunction("getHistoryCount");
@@ -228,12 +274,12 @@ namespace DACS.Services
                 for (int i = 0; i < (int)count; i++)
                 {
                     // 1. Gọi hàm và hứng bằng DTO chuyên dụng cho Output
-                    var eventRaw = await getByIndexFunction.CallDeserializingToObjectAsync<GetHistoryByIndexOutputDTO>(maLo, i);
+                    var eventRaw = await getByIndexFunction.CallDeserializingToObjectAsync<HistoryAddedEventDTO>(maLo, i);
 
                     // 2. Chuyển đổi thủ công sang DTO chính của bạn
                     if (eventRaw != null)
                     {
-                        result.Add(new TraceEventDTO
+                        result.Add(new HistoryAddedEventDTO
                         {
                             Timestamp = eventRaw.Timestamp,
                             Status = eventRaw.Status,
@@ -251,6 +297,47 @@ namespace DACS.Services
         }
         // <<< ================= KẾT THÚC SỬA ================= >>>
 
+        public async Task<HistoryAddedEventDTO?> GetHistoryByTxHash(string txHash)
+        {
+            var receipt = await _web3.Eth.Transactions
+                .GetTransactionReceipt
+                .SendRequestAsync(txHash);
+
+            var eventHandler = _web3.Eth.GetEvent<HistoryAddedEventDTO>(_contractAddress);
+
+            var events = eventHandler.DecodeAllEventsForEvent(receipt.Logs);
+
+            if (events == null || events.Count == 0)
+                return null;   // ✅ Không có event nào
+
+            var ev = events[0].Event;
+
+            Console.WriteLine($"Lot: {ev.LotId}");
+            Console.WriteLine($"Status: {ev.Status}");
+            Console.WriteLine($"Location: {ev.Location}");
+            Console.WriteLine($"Metadata: {ev.Metadata}");
+
+            return ev;   // ✅ Trả về giá trị
+        }
+
+
+        public async Task<List<HistoryAddedEventDTO>> GetHistoryByLotId(string lotId)
+        {
+            var countFunction = _contract.GetFunction("getHistoryCount");
+            var getFunction = _contract.GetFunction("getHistoryByIndex");
+
+            var count = await countFunction.CallAsync<int>(lotId);
+
+            var list = new List<HistoryAddedEventDTO>();
+
+            for (int i = 0; i < count; i++)
+            {
+                var result = await getFunction.CallAsync<HistoryAddedEventDTO>(lotId, i);
+                list.Add(result);
+            }
+
+            return list;
+        }
 
         // (Hàm TestBlockchainAsync giữ nguyên)
         public async Task TestBlockchainAsync()
@@ -259,8 +346,6 @@ namespace DACS.Services
             {
                 _logger.LogInformation("===== BẮT ĐẦU KIỂM TRA GHI & ĐỌC BLOCKCHAIN =====");
                 string lotId = "TEST_AUTO_" + DateTime.Now.ToString("yyyyMMddHHmmss");
-
-                await GhiNhatKyAsync(lotId, "TEST_GHI", "KHO_A", "Metadata thử nghiệm");
 
                 var events = await GetHistoryAsync(lotId);
                 if (events.Count > 0)
@@ -281,23 +366,28 @@ namespace DACS.Services
                 _logger.LogError(ex, "Lỗi trong quá trình test tự động Blockchain.");
             }
         }
+
     }
 
     // <<< ================= THÊM CLASS NÀY VÀO ================= >>>
     // Class này chỉ dùng để "hứng" 4 giá trị trả về không tên của hàm getHistoryByIndex
-    [FunctionOutput]
-    public class GetHistoryByIndexOutputDTO : IFunctionOutputDTO
+
+    [Event("HistoryAdded")]
+    public class HistoryAddedEventDTO : IEventDTO
     {
-        [Parameter("uint256", "", 1)]
+        [Parameter("bytes32", "lotId", 1, true)]
+        public byte[] LotId { get; set; }
+
+        [Parameter("uint256", "timestamp", 2, false)]
         public BigInteger Timestamp { get; set; }
 
-        [Parameter("string", "", 2)]
+        [Parameter("string", "status", 3, false)]
         public string Status { get; set; }
 
-        [Parameter("string", "", 3)]
+        [Parameter("string", "location", 4, false)]
         public string Location { get; set; }
 
-        [Parameter("string", "", 4)]
+        [Parameter("string", "metadata", 5, false)]
         public string Metadata { get; set; }
     }
     // <<< ================= KẾT THÚC THÊM ================= >>>

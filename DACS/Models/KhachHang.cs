@@ -28,12 +28,12 @@ namespace DACS.Models
 
         // --- THÊM CÁC TRƯỜNG KHÓA NGOẠI MÃ ĐỊA CHỈ ---
         // Kiểu dữ liệu (string/int) và độ dài phải khớp với Khóa chính của bảng ĐVHC
-        
+
         [StringLength(10)] // Hoặc int
         [Display(Name = "Tỉnh/Thành phố")]
         public string MaTinh { get; set; } // <<< Khóa ngoại đến TinhThanhPho
 
-        
+
         [StringLength(10)] // Hoặc int
         [Display(Name = "Quận/Huyện")]
         public string MaQuan { get; set; } // <<< Khóa ngoại đến QuanHuyen
@@ -80,6 +80,7 @@ namespace DACS.Models
         public virtual ICollection<ChiTietDanhGia> ChiTietDanhGias { get; set; } = new List<ChiTietDanhGia>();
         public virtual ICollection<YeuCauThuGom> YeuCauThuGoms { get; set; } = new List<YeuCauThuGom>();
         public virtual ICollection<ChatHistory> ChatHistories { get; set; } = new List<ChatHistory>();
+
 
         // -----------------------------
     }

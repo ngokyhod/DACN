@@ -14,8 +14,21 @@ namespace DACS.Models.Blockchain
     [FunctionOutput]
     public class TraceEventDTO
     {
+
         [Parameter("uint256", "timestamp", 1)]
         public BigInteger Timestamp { get; set; }
+        public DateTime GetDateTime()
+        {
+            // Kiểm tra và chuyển đổi BigInteger sang long an toàn
+            if (Timestamp > long.MaxValue)
+            {
+                // Xử lý trường hợp BigInteger quá lớn nếu cần
+                return DateTime.MinValue;
+            }
+
+            // Timestamp được lưu trên EVM thường là giây (Unix Epoch Time)
+            return DateTimeOffset.FromUnixTimeSeconds((long)Timestamp).LocalDateTime;
+        }
 
         [Parameter("string", "status", 2)]
         public string Status { get; set; }

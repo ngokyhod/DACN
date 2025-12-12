@@ -34,6 +34,17 @@
                     @* Added link to Collection History here for consistency *@
                     <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
                 </a>
+                @* 5. Chờ đánh giá (Đã sửa lại class cho đẹp) *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "SanPhamChoDanhGia" ? "active" : "")">
+                    <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
+                </a>
+
+                @* 6. Lịch sử đánh giá (THÊM MỚI) *@
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia"
+                   class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDanhGia" ? "active" : "")">
+                    <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
+                </a>
                 <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword" class="list-group-item list-group-item-action">
                     <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
                 </a>

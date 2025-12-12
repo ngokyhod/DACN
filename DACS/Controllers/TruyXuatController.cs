@@ -49,7 +49,7 @@ namespace DACS.Controllers
             var viewModel = new NhatKyViewModel
             {
                 LotInfo = lotInfo,     // Dữ liệu từ SQL
-                History = history      // Dữ liệu từ Blockchain
+                //History = history      // Dữ liệu từ Blockchain
             };
 
             // === BƯỚC 4: GỬI VIEWMODEL RA VIEW ===
@@ -67,13 +67,15 @@ namespace DACS.Controllers
             {
                 // ---- BƯỚC 1: GHI (WRITE) ----
                 resultLog.Add($"Đang GHI vào Lô: {testLotId}...");
-                string txHash = await _blockchainService.GhiNhatKyAsync(
-                    testLotId,
-                    "TEST_GHI",
-                    "TEST_LOCATION",
-                    "Ghi thành công từ C#"
-                );
-                resultLog.Add($"GHI THÀNH CÔNG. TxHash: {txHash}");
+                dynamic result2 = await _blockchainService.GhiNhatKyAsync(
+     testLotId,
+     "TEST_GHI",
+     "TEST_LOCATION",
+     "Ghi thành công từ C#"
+);
+
+                string txHash2 = result2.TxHash;
+                resultLog.Add($"GHI THÀNH CÔNG. TxHash: {txHash2}");
 
                 // Chờ 3 giây để Ganache đào (mine) khối
                 resultLog.Add("Đang chờ 3 giây cho khối được đào...");

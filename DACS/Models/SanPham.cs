@@ -49,7 +49,12 @@ namespace DACS.Models
         [ForeignKey("M_DonViTinh")]
         public virtual DonViTinh? DonViTinh { get; set; }
 
+        public int ThangBatDauVu { get; set; } // Ví dụ: 5 (Tháng 5)
+        public int ThangKetThucVu { get; set; } // Ví dụ: 10 (Tháng 10)
 
+        // Hệ số giá (1.0 là giữ nguyên, 0.9 là giảm 10%, 1.2 là tăng 20%)
+        public double HeSoGiaTrongMua { get; set; } = 0.9; // Vào mùa rẻ hơn
+        public double HeSoGiaTraiMua { get; set; } = 1.15; // Trái mùa đắt hơn
         public virtual ICollection<ChiTietDatHang> ChiTietDatHangs { get; set; } = new List<ChiTietDatHang>();
         public virtual ICollection<ChiTietDanhGia> ChiTietDanhGias { get; set; } = new List<ChiTietDanhGia>();
         public virtual ICollection<ChiTietThuGom> ChiTietThuGoms { get; set; } = new List<ChiTietThuGom>();

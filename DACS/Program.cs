@@ -6,6 +6,7 @@ using DACS.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Nethereum.Contracts.Standards.ENS;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -31,7 +32,24 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
 .AddDefaultTokenProviders()
 .AddDefaultUI()
 .AddEntityFrameworkStores<ApplicationDbContext>();
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(x => x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    // Giải quyết lỗi trùng tên Class (SchemaId already used)
+    c.CustomSchemaIds(type => type.ToString());
+});
+
+builder.Services.AddControllers().AddJsonOptions(x =>
+   x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        builder => builder.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader());
+});
 builder.Services.ConfigureApplicationCookie(options => {
     options.LoginPath = $"/Identity/Account/Login";
     options.LogoutPath = $"/Identity/Account/Logout";
@@ -43,6 +61,7 @@ builder.Services.ConfigureApplicationCookie(options => {
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
+//builder.Services.AddScoped<IGeoService, GeoService>();
 builder.Services.AddSingleton<BlockchainService>();
 builder.Services.AddScoped<INguoiMuaRepository, NguoiMuaRepository>();
 builder.Services.AddScoped<IThuGomRepository, ThuGomRepository>();
@@ -66,7 +85,10 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
 }
-app.MapHub<ChatHub>("/chatHub");
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseCors("AllowAll");
+app.MapHub<ChatHub>("Hubs/ChatHub");
 app.UseSession();
 app.UseStaticFiles();
 app.UseRouting();

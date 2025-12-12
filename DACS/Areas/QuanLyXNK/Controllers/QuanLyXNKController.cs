@@ -553,13 +553,16 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                         // <<< ================= BẮT ĐẦU GỌI BLOCKCHAIN ================= >>>
                         try
                         {
-                            string txHash = await _blockchainService.GhiNhatKyAsync(
-                                newMaLo,              // Mã Lô (ví dụ: "L001")
-                                "NHẬP KHO",           // Trạng thái
-                                targetMaKho,          // Địa điểm (Mã Kho)
-                                $"Từ Yêu cầu: {yeuCau}" // Ghi chú (Metadata)
-                            );
-                            _logger.LogInformation("ĐÃ GHI BLOCKCHAIN (Nhập Kho) cho Lô {MaLo}, TxHash: {TxHash}", newMaLo, txHash);
+                            dynamic result1 = await _blockchainService.GhiNhatKyAsync(
+    newMaLo,
+    "NHẬP KHO",
+    targetMaKho,
+    $"Từ Yêu cầu: {yeuCau}"
+);
+
+                            string txHash1 = result1.TxHash;
+
+                            _logger.LogInformation("ĐÃ GHI BLOCKCHAIN (Nhập Kho) cho Lô {MaLo}, TxHash: {TxHash}", newMaLo, txHash1);
 
                             // (Bạn có thể thêm 1 cột [BlockchainHashNhap] vào LoTonKho để lưu txHash này nếu muốn)
                             // newLoTonKho.BlockchainHashNhap = txHash; 

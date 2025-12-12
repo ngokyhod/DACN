@@ -1676,7 +1676,105 @@ namespace DACS.Areas.KhachHang.Controllers
                 model.WardOptions ??= Enumerable.Empty<SelectListItem>();
             }
         }
+        public async Task<IActionResult> SanPhamChoDanhGia()
+        {
+            var userId = _userManager.GetUserId(User);
+            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(k => k.UserId == userId);
 
+            if (khachHang == null) return RedirectToAction("Login", "Account", new { area = "Identity" });
+
+            // Lấy danh sách ID sản phẩm đã mua (Từ các đơn hàng đã hoàn thành/giao hàng)
+            // LƯU Ý: Thay "Hoàn thành" bằng trạng thái đơn hàng thành công thực tế của bạn
+            var purchasedProductIds = await _context.ChiTietDatHangs
+                .Include(ct => ct.DonHang)
+                .Where(ct => ct.DonHang.M_KhachHang == khachHang.M_KhachHang
+                             && ct.DonHang.TrangThai == "Hoàn thành")
+                .Select(ct => ct.M_SanPham)
+                .Distinct()
+                .ToListAsync();
+
+            // Lấy danh sách ID sản phẩm đã đánh giá
+            var reviewedProductIds = await _context.ChiTietDanhGias
+                .Where(dg => dg.M_KhachHang == khachHang.M_KhachHang)
+                .Select(dg => dg.M_SanPham)
+                .ToListAsync();
+
+            // Lọc ra sản phẩm chưa đánh giá = (Đã mua) - (Đã đánh giá)
+            var productsToReviewIds = purchasedProductIds.Except(reviewedProductIds).ToList();
+
+            var productsToReview = await _context.SanPhams
+                .Where(sp => productsToReviewIds.Contains(sp.M_SanPham))
+                .ToListAsync();
+
+            return View(productsToReview);
+        }
+
+        // 2. Xử lý Gửi đánh giá (Chuyển từ DS_SPController sang đây và sửa đổi logic)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuiDanhGia(string m_SanPham, int mucDoHaiLong, string moTa_DanhGia)
+        {
+            var userId = _userManager.GetUserId(User);
+            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(k => k.UserId == userId);
+
+            if (khachHang == null) return RedirectToAction("Index");
+
+            // BẢO MẬT: Kiểm tra kỹ lại lần nữa xem khách đã mua sản phẩm này chưa
+            bool hasPurchased = await _context.ChiTietDatHangs
+                .Include(ct => ct.DonHang)
+                .AnyAsync(ct => ct.M_SanPham == m_SanPham
+                                && ct.DonHang.M_KhachHang == khachHang.M_KhachHang
+                                && ct.DonHang.TrangThai == "Hoàn thành");
+
+            if (!hasPurchased)
+            {
+                TempData["Message"] = "Lỗi: Bạn chưa mua sản phẩm này hoặc đơn hàng chưa hoàn tất.";
+                return RedirectToAction("SanPhamChoDanhGia");
+            }
+
+            // Kiểm tra đã đánh giá chưa
+            bool alreadyReviewed = await _context.ChiTietDanhGias
+                .AnyAsync(dg => dg.M_SanPham == m_SanPham && dg.M_KhachHang == khachHang.M_KhachHang);
+
+            if (alreadyReviewed)
+            {
+                TempData["Message"] = "Bạn đã đánh giá sản phẩm này rồi.";
+                return RedirectToAction("SanPhamChoDanhGia");
+            }
+
+            // Lưu đánh giá
+            var review = new ChiTietDanhGia
+            {
+                M_KhachHang = khachHang.M_KhachHang,
+                M_SanPham = m_SanPham,
+                MucDoHaiLong = mucDoHaiLong.ToString(), // Nếu bạn đã sửa model thành int thì bỏ .ToString()
+                MoTa_DanhGia = moTa_DanhGia,
+                NgayDanhGia = DateTime.UtcNow
+            };
+
+            _context.ChiTietDanhGias.Add(review);
+            await _context.SaveChangesAsync();
+
+            TempData["Message"] = "Đánh giá thành công! Cảm ơn bạn.";
+            return RedirectToAction("SanPhamChoDanhGia");
+        }
+        [HttpGet]
+        public async Task<IActionResult> LichSuDanhGia()
+        {
+            var userId = _userManager.GetUserId(User);
+            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(k => k.UserId == userId);
+
+            if (khachHang == null) return RedirectToAction("Login", "Account", new { area = "Identity" });
+
+            // Lấy danh sách đánh giá của khách hàng này, kèm thông tin sản phẩm
+            var history = await _context.ChiTietDanhGias
+                .Include(dg => dg.SanPham) // Join bảng Sản phẩm để lấy tên và ảnh
+                .Where(dg => dg.M_KhachHang == khachHang.M_KhachHang)
+                .OrderByDescending(dg => dg.NgayDanhGia) // Mới nhất lên đầu
+                .ToListAsync();
+
+            return View(history);
+        }
 
 
 

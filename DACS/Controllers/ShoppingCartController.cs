@@ -12,6 +12,7 @@ using System.Linq; // Thêm using
 using System.Threading.Tasks;
 using YourNameSpace.Extensions; // Thêm using
 using DACS.Services;
+using DACS.PTTT;
 
 namespace DACS.Controllers
 {
@@ -40,11 +41,14 @@ namespace DACS.Controllers
             _smsService = smsService;
         }
 
-        public IActionResult Checkout()
+        public IActionResult Checkout() 
         {
             return View(new DonHang());
         }
-
+        public IActionResult VNpayRedirect()
+        {
+            return View(new DonHang());
+        }
         [HttpPost]
         public async Task<IActionResult> Checkout(DonHang order)
         {
@@ -200,11 +204,102 @@ namespace DACS.Controllers
                 TempData["ErrorMessage"] = "Đã xảy ra lỗi khi tạo đơn hàng. Vui lòng thử lại.";
                 return View("Index", cart);
             }
+            if (order.M_PhuongThuc == "PT005")
+            {
+                // Cấu hình (Đảm bảo các giá trị này KHỚP với giá trị bạn đăng ký)
+                string vnp_Returnurl = "https://localhost:7240/ShoppingCart/VnpayReturn"; // << ĐÚNG VỚI URL ĐĂNG KÝ
+                string vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+                string vnp_TmnCode = "ODJ7F1TO";
+                string vnp_HashSecret = "GEHJ4HI0BPW6D8C6DZG42TF9DZ2L5ZUI";
 
-            HttpContext.Session.Remove("Cart");
+                VnPayLibrary vnpay = new VnPayLibrary();
+
+                // Thêm các tham số BẮT BUỘC
+                vnpay.AddRequestData("vnp_Version", "2.1.0");
+                vnpay.AddRequestData("vnp_Command", "pay");
+                vnpay.AddRequestData("vnp_TmnCode", vnp_TmnCode);
+
+                // Đảm bảo ép kiểu sang long để tránh lỗi định dạng
+                vnpay.AddRequestData("vnp_Amount", ((long)(order.TotalPrice * 100)).ToString());
+
+                vnpay.AddRequestData("vnp_CreateDate", DateTime.Now.ToString("yyyyMMddHHmmss"));
+                vnpay.AddRequestData("vnp_CurrCode", "VND");
+                vnpay.AddRequestData("vnp_IpAddr", "127.0.0.1");
+                vnpay.AddRequestData("vnp_Locale", "vn");
+                vnpay.AddRequestData("vnp_OrderInfo", $"Thanh toan don hang {order.M_DonHang}"); // Dùng tiếng Việt không dấu
+                vnpay.AddRequestData("vnp_OrderType", "other");
+                vnpay.AddRequestData("vnp_ReturnUrl", vnp_Returnurl);
+                vnpay.AddRequestData("vnp_TxnRef", order.M_DonHang);
+
+                // Tạo URL (Hàm này nằm trong VnPayLibrary đã được tối ưu hóa)
+                string vnpayUrl = vnpay.CreateRequestUrl(vnp_Url, vnp_HashSecret);
+
+                // Chuyển hướng
+                return Redirect(vnpayUrl);
+            }
+            // Nếu COD
             return View("OrderCompleted", order.M_DonHang);
+
+        }
+        public async Task<IActionResult> VnpayReturn()
+        {
+            string hashSecret = "GEHJ4HI0BPW6D8C6DZG42TF9DZ2L5ZUI";
+
+            VnPayLibrary vnpay = new VnPayLibrary();
+
+            // Lấy toàn bộ query string từ VNPAY
+            var query = Request.Query;
+            foreach (var key in query.Keys)
+            {
+                if (key.StartsWith("vnp_"))
+                {
+                    vnpay.AddResponseData(key, query[key]);
+                }
+            }
+
+            // Lấy mã phản hồi từ VNPAY
+            string vnp_ResponseCode = vnpay.GetResponseData("vnp_ResponseCode");
+            string vnp_TxnRef = vnpay.GetResponseData("vnp_TxnRef");
+            string vnp_TransactionNo = vnpay.GetResponseData("vnp_TransactionNo");
+            string vnp_SecureHash = vnpay.GetResponseData("vnp_SecureHash");
+
+            // Kiểm tra chữ ký từ VNPAY
+            bool isValidSignature = vnpay.ValidateSignature(vnp_SecureHash, hashSecret);
+
+            
+            // Lấy đơn hàng từ DB dựa theo Mã đơn hàng (vnp_TxnRef)
+            var order = await _context.DonHangs.FirstOrDefaultAsync(x => x.M_DonHang == vnp_TxnRef);
+
+            if (order == null)
+            {
+                return Content("Không tìm thấy đơn hàng!");
+            }
+
+            // Lưu mã giao dịch VNPAY (không đổi mã đơn hàng!)
+            //order.MaGiaoDichVnpay = vnp_TransactionNo;
+
+            // Mã 00 = Thanh toán thành công
+            if (vnp_ResponseCode == "00")
+            {
+                order.TrangThaiThanhToan = "Thanh toán thành công";
+            }
+            else
+            {
+                order.TrangThaiThanhToan = "Thanh toán thất bại";
+            }
+
+            await _context.SaveChangesAsync();
+
+            return View("VnpayRedirect", order);
         }
 
+
+
+        public IActionResult OrderCompleted(string id)
+        {
+            // Lấy đơn hàng và hiển thị chi tiết...
+            return View(id); // Giả sử OrderCompleted View nhận OrderId
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult UpdateCartItem([FromBody] CartUpdateModel model)
@@ -244,7 +339,7 @@ namespace DACS.Controllers
                 Name = product.TenSanPham,
                 Price = product.Gia,
                 Quantity = 1, // Tạm gán là 1 (vì đang bán theo khối lượng)
-                Khoiluong = khoiluong // <<< SỬA: Lấy từ tham số
+                Khoiluong = 1 // <<< SỬA: Lấy từ tham số
             };
             var cart = HttpContext.Session.GetObjectFromJson<ShoppingCart>("Cart") ?? new ShoppingCart();
             cart.AddItem(cartItem);
