@@ -1,4 +1,10 @@
-﻿<!doctype html>
+﻿@model IEnumerable<DACS.Models.SanPham>
+
+@{
+    ViewData["Title"] = "Trang chủ";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<!doctype html>
 <html lang="en">
 <head>
     <!-- Required meta tags -->
@@ -82,30 +88,33 @@
     @* danh sach san pham *@
     <div class="header-grid">Hệ Thống Thu Gom Phụ Phẩm Nông Nghiệp</div>
 
-    <div class="grid-container">
-        <div class="grid-item">
-            <img src="~/images/Products/rom_kho_bo.png" alt="Rơm rạ">
-            <h3>Rơm Rạ</h3>
-            <p><strong>Giá:</strong> 500đ/kg</p>
-            <a href="#" class="button">Xem chi tiết</a>
-        </div>
-        <div class="grid-item">
-            <img src="~/images/Products/vo_trau_xay.png" alt="Vỏ trấu">
-            <h3>Vỏ Trấu</h3>
-            <p><strong>Giá:</strong> 300đ/kg</p>
-            <a href="#" class="button">Xem chi tiết</a>
-        </div>
-        <div class="grid-item">
-            <img src="~/images/Products/Xo_dua.png" alt="Xơ dừa">
-            <h3>Xơ Dừa</h3>
-            <p><strong>Giá:</strong> 700đ/kg</p>
-            <a href="#" class="button">Xem chi tiết</a>
-        </div>
-        <div class="grid-item">
-            <img src="~/images/Products/Thancayngo.jpg" alt="Thân cây ngô">
-            <h3>Thân Cây Ngô</h3>
-            <p><strong>Giá:</strong> 600đ/kg</p>
-            <a href="#" class="button">Xem chi tiết</a>
+    <div class="container">
+        <div class="row">
+            @if (Model != null && Model.Any())
+            {
+                foreach (var item in Model)
+                {
+                    <div class="col-md-3 mb-4">
+                        <div class="grid-item p-3 border rounded h-100 shadow-sm" style="background: white;">
+                            <img src="@Url.Content(item.AnhSanPham ?? "~/images/no-image.png")" alt="@item.TenSanPham">
+                            <h3 class="mt-3 fs-5">@item.TenSanPham</h3>
+                            <p>
+                                <strong>Giá:</strong>
+                                <span class="text-danger fw-bold">@item.Gia.ToString("N0")đ</span> / @(item.DonViTinh?.TenLoaiTinh ?? "kg")
+                            </p>
+                            <a asp-controller="DS_SP" asp-action="CT_SP" asp-route-id="@item.M_SanPham" class="button w-100 text-center">
+                                Xem chi tiết
+                            </a>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="col-12 text-center">
+                    <p>Hiện chưa có sản phẩm nào.</p>
+                </div>
+            }
         </div>
     </div>
 

@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DACS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251209155336_hoadzvcl")]
-    partial class hoadzvcl
+    [Migration("20251223031226_hoadz")]
+    partial class hoadz
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -446,10 +446,10 @@ namespace DACS.Migrations
                     b.Property<string>("DanhSachHinhAnh")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<double>("DoAmThucTe")
+                    b.Property<double?>("DoAmThucTe")
                         .HasColumnType("float");
 
-                    b.Property<double>("DonGiaThuMua")
+                    b.Property<double?>("DonGiaThuMua")
                         .HasColumnType("float");
 
                     b.Property<string>("DonHangM_DonHang")
@@ -458,10 +458,10 @@ namespace DACS.Migrations
                     b.Property<decimal?>("GiaTriMongMuon")
                         .HasColumnType("decimal(18, 2)");
 
-                    b.Property<double>("HeSoDoAm")
+                    b.Property<double?>("HeSoDoAm")
                         .HasColumnType("float");
 
-                    b.Property<double>("HeSoMuaVu")
+                    b.Property<double?>("HeSoMuaVu")
                         .HasColumnType("float");
 
                     b.Property<string>("M_DonViTinh")
@@ -491,7 +491,7 @@ namespace DACS.Migrations
                     b.Property<string>("MoTa")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<double>("PhiVanChuyen")
+                    b.Property<double?>("PhiVanChuyen")
                         .HasColumnType("float");
 
                     b.Property<string>("QuanLyM_QuanLy")
@@ -704,6 +704,10 @@ namespace DACS.Migrations
                     b.Property<string>("Email_KhachHang")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FirebaseID")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("Gender")
                         .HasMaxLength(10)

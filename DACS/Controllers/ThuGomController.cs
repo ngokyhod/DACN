@@ -11,6 +11,7 @@ using DACS.Services;
 using DACS.Models.AI;
 using Newtonsoft.Json;
 using DACS.Areas.QuanLyXNK.Controllers;
+using Google.Cloud.Firestore;
 
 namespace DACS.Controllers
 {
@@ -22,14 +23,15 @@ namespace DACS.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
-
+        private readonly FirebaseSyncService _firebaseSync;
         public ThuGomController(
             IConfiguration configuration,
             ILogger<ThuGomController> logger,
             ApplicationDbContext dbContext,
             IWebHostEnvironment webHostEnvironment,
             UserManager<ApplicationUser> userManager,
-            IEmailService emailService)
+            IEmailService emailService,
+            FirebaseSyncService firebaseSync)
         {
             _configuration = configuration;
             _logger = logger;
@@ -37,6 +39,7 @@ namespace DACS.Controllers
             _webHostEnvironment = webHostEnvironment;
             _userManager = userManager;
             _emailService = emailService;
+            _firebaseSync = firebaseSync;
         }
 
         [HttpPost]
@@ -156,7 +159,12 @@ namespace DACS.Controllers
                     DacTinh_DaXuLy = model.CharProcessed,
                     DanhSachHinhAnh = savedImagePaths.Any() ? string.Join(";", savedImagePaths) : null,
                     TrangThaiXuLy = "MoiYeuCau",
-                    MaLoTonKho = null
+                    MaLoTonKho = null,
+                    DoAmThucTe = model.DoAmThucTe ?? 0,
+                    HeSoMuaVu = model.HeSoMuaVu ?? 1.0,
+                    HeSoDoAm = model.HeSoDoAm ?? 1.0,
+                    PhiVanChuyen = model.PhiVanChuyen ?? 0,
+                    DonGiaThuMua = model.DonGiaThuMua ?? 0
                 };
 
                 yeuCau.ChiTietThuGoms = new List<ChiTietThuGom> { chiTiet };
@@ -165,7 +173,66 @@ namespace DACS.Controllers
                 _context.YeuCauThuGoms.Add(yeuCau);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+                try
+                {
+                    // A. Lấy thông tin Tên (Vì ViewModel chỉ có Mã)
+                    // Cần query DB để lấy tên hiển thị đẹp trên Firebase
+                    var tenTinh = (await _context.TinhThanhPhos.FindAsync(model.SupplierProvince))?.TenTinh ?? model.SupplierProvince;
+                    var tenQuan = (await _context.QuanHuyens.FindAsync(model.SupplierDistrict))?.TenQuan ?? model.SupplierDistrict;
+                    var tenXa = (await _context.XaPhuongs.FindAsync(model.SupplierWard))?.TenXa ?? model.SupplierWard;
 
+                    var sanPham = await _context.SanPhams.FindAsync(model.M_SanPham);
+                    var loaiSp = await _context.LoaiSanPhams.FindAsync(model.M_LoaiSP);
+
+                    // B. Tạo địa chỉ đầy đủ
+                    string fullAddress = $"{model.SupplierStreet}, {tenXa}, {tenQuan}, {tenTinh}";
+
+                    // C. Đóng gói dữ liệu chuẩn format bạn yêu cầu
+                    var firestoreData = new Dictionary<string, object>
+            {
+                { "amount", model.ByproductQuantity ?? 0 },
+                { "category", loaiSp?.TenLoai ?? model.M_LoaiSP },
+                { "contactName", khachHang.Ten_KhachHang },
+                { "contactPhone", model.SupplierPhone ?? khachHang.SDT_KhachHang },
+                { "createdAt", Timestamp.GetCurrentTimestamp() }, // Thời gian tạo
+                { "diaChiCuThe", model.SupplierStreet },
+                { "doAm", model.DoAmThucTe ?? 0 },
+                { "email", khachHang.Email_KhachHang ?? "" },
+                { "fullAddress", fullAddress },
+                { "giaTriMongMuon", model.ByproductValue ?? 0 },
+                
+                // Mã địa chỉ
+                { "maTinh", model.SupplierProvince },
+                { "maQuan", model.SupplierDistrict },
+                { "maXa", model.SupplierWard },
+
+                { "moTa", model.ByproductDescription ?? "" },
+                
+                // Thông tin sản phẩm
+                { "productId", model.M_SanPham },
+                { "productName", sanPham?.TenSanPham ?? "Sản phẩm chưa xác định" },
+                
+                // Tên địa chỉ
+                { "tenTinh", tenTinh },
+                { "tenQuan", tenQuan },
+                { "tenXa", tenXa },
+
+                { "trangThaiXuLy", "MoiYeuCau" },
+                
+                // QUAN TRỌNG: UID ĐỂ LINK VỚI USER
+                { "uid", khachHang.FirebaseID ?? "" }
+            };
+
+                    // D. Gọi Service đẩy lên Firebase
+                    // Lưu ý: Cần Inject FirebaseSyncService vào Controller của bạn
+                    await _firebaseSync.AddThuGomToFirestoreAsync(firestoreData);
+                }
+                catch (Exception fireEx)
+                {
+                    // Chỉ log lỗi, KHÔNG rollback SQL vì SQL đã thành công rồi.
+                    // Việc đồng bộ có thể chạy lại sau hoặc chấp nhận sai lệch nhỏ.
+                    _logger.LogError(fireEx, "Lỗi khi đồng bộ đơn Thu Gom sang Firebase.");
+                }
                 // <<< ============ GỬI EMAIL SAU KHI ĐẶT THU GOM THÀNH CÔNG ============ >>>
                 try
                 {
@@ -560,5 +627,6 @@ namespace DACS.Controllers
 
             return basePrice + ((km - 2) * pricePerKm);
         }
+       
     }
 }

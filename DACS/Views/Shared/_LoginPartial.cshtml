@@ -6,6 +6,8 @@
 <ul class="navbar-nav">
 @if (SignInManager.IsSignedIn(User))
 {
+        var user = await UserManager.GetUserAsync(User);
+        var hienThiTen = user?.FullName ?? User.Identity?.Name ?? "Khách hàng";
     <li class="nav-item">
             @if (User.IsInRole("Owner"))
             {
@@ -16,7 +18,7 @@
             @if (User.IsInRole("KhachHang"))
             {
                 <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index" class="nav-link">
-                    Hello, @(UserManager.GetUserName(User) ?? "User")!
+                    Hello, <strong>@hienThiTen</strong>!
                 </a>
             }
             @if (User.IsInRole("QuanLyDH"))

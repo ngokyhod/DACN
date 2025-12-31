@@ -21,6 +21,7 @@
                 using var reader = process.StandardOutput;
                 string result = reader.ReadToEnd();
                 process.WaitForExit();
+
                 return result;
             }
         }

@@ -10,7 +10,9 @@ namespace DACS.Models
         [Key]
         [StringLength(10)]
         public string M_KhachHang { get; set; }
-
+        [StringLength(30)]
+        public string? FirebaseID { get; set; } = null;
+        
         [Required(ErrorMessage = "Vui lòng nhập tên.")]
         [StringLength(100)]
         public string Ten_KhachHang { get; set; }

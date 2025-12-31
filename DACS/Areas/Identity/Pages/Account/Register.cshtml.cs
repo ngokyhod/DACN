@@ -10,23 +10,25 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading;
 using System.Threading.Tasks;
+using DACS.Models;
+using DACS.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using DACS.Models;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace DACS.Areas.Identity.Pages.Account
 {
     public class RegisterModel : PageModel
     {
+        private readonly FirebaseSyncService _firebaseSync; // Đã khai báo
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ApplicationDbContext _context;
 
@@ -45,7 +47,8 @@ namespace DACS.Areas.Identity.Pages.Account
             RoleManager<IdentityRole> roleManager,
             ILogger<RegisterModel> logger,
             IEmailSender emailSender,
-            ApplicationDbContext context)
+            ApplicationDbContext context,
+            FirebaseSyncService firebaseSync)
         {
             _userManager = userManager;
             _userStore = userStore;
@@ -55,6 +58,7 @@ namespace DACS.Areas.Identity.Pages.Account
             _logger = logger;
             _emailSender = emailSender;
             _context = context;
+            _firebaseSync = firebaseSync;
         }
 
         /// <summary>
@@ -94,7 +98,10 @@ namespace DACS.Areas.Identity.Pages.Account
             [EmailAddress]
             [Display(Name = "Email")]
             public string Email { get; set; }
-
+            [Required(ErrorMessage = "Vui lòng nhập số điện thoại")]
+            [Phone(ErrorMessage = "Số điện thoại không hợp lệ")]
+            [Display(Name = "Số điện thoại")]
+            public string PhoneNumber { get; set; }
             /// <summary>
             ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
@@ -119,7 +126,7 @@ namespace DACS.Areas.Identity.Pages.Account
             public IEnumerable<SelectListItem> RoleList { get; set; } // Danh sách các role
         }
 
-
+        
         public async Task OnGetAsync(string returnUrl = null)
         {
 
@@ -145,16 +152,16 @@ namespace DACS.Areas.Identity.Pages.Account
             ReturnUrl = returnUrl;
             ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
         }
-
         public async Task<IActionResult> OnPostAsync(string returnUrl = null)
         {
             returnUrl ??= Url.Content("~/");
             ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+
             if (ModelState.IsValid)
             {
                 var user = CreateUser();
                 user.FullName = Input.FullName;
-
+                user.PhoneNumber = Input.PhoneNumber;
                 await _userStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
                 await _emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
                 var result = await _userManager.CreateAsync(user, Input.Password);
@@ -165,18 +172,44 @@ namespace DACS.Areas.Identity.Pages.Account
 
                     var roleToAssign = string.IsNullOrEmpty(Input.Role) ? SD.Role_KhachHang : Input.Role;
                     await _userManager.AddToRoleAsync(user, roleToAssign);
-
+                    
+                    
                     try
                     {
                         if (roleToAssign == SD.Role_KhachHang)
                         {
+                            string sdtChoFirebase = null;
+                            if (!string.IsNullOrEmpty(Input.PhoneNumber))
+                            {
+                                sdtChoFirebase = Input.PhoneNumber.Trim();
+                                if (sdtChoFirebase.StartsWith("0"))
+                                {
+                                    sdtChoFirebase = "+84" + sdtChoFirebase.Substring(1);
+                                }
+                            }
+                            
+                            string firebaseUid = await _firebaseSync.CreateFirebaseUserAsync(
+                                Input.Email,
+                                Input.Password,
+                                Input.FullName,
+                                sdtChoFirebase
+                            );
+                            if (string.IsNullOrEmpty(firebaseUid))
+                            {
+                                await _userManager.DeleteAsync(user);
+
+                                ModelState.AddModelError(string.Empty, "Đăng ký thất bại: Số điện thoại hoặc Email này đã tồn tại trên hệ thống Firebase.");
+                                return Page(); 
+                            }
                             var nguoiMuaProfile = new Models.KhachHang
                             {
                                 M_KhachHang = Guid.NewGuid().ToString("N").Substring(0, 10),
+                                
                                 UserId = user.Id,
+                                FirebaseID = firebaseUid,
                                 Ten_KhachHang = user.FullName ?? user.UserName ?? "Chưa đặt tên",
                                 Email_KhachHang = user.Email ?? "None",
-                                SDT_KhachHang = "None",
+                                SDT_KhachHang = Input.PhoneNumber,
                                 MaTinh = "T00",
                                 MaQuan = "Q0100",
                                 MaXa = "X010100",
@@ -186,6 +219,15 @@ namespace DACS.Areas.Identity.Pages.Account
                             _context.KhachHangs.Add(nguoiMuaProfile);
                             await _context.SaveChangesAsync(); // Lưu trực tiếp qua DbContext
                             _logger.LogInformation($"NguoiMua profile created for User ID: {user.Id}");
+                            if (!string.IsNullOrEmpty(firebaseUid))
+                            {
+                                await _firebaseSync.SaveToFirestoreAsync(
+                                    firebaseUid,
+                                    Input.FullName,
+                                    Input.Email,
+                                    sdtChoFirebase
+                                );
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -193,7 +235,7 @@ namespace DACS.Areas.Identity.Pages.Account
                         _logger.LogError(ex, $"Error creating profile record (BenhNhan/NhanVien) for User ID: {user.Id}");
 
                     }
-
+                    
                     var userId = await _userManager.GetUserIdAsync(user);
                     var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                     code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DACS.Migrations
 {
     /// <inheritdoc />
-    public partial class hoadzvcl : Migration
+    public partial class hoadz : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -488,7 +488,7 @@ namespace DACS.Migrations
                         column: x => x.M_SanPham,
                         principalTable: "SanPhams",
                         principalColumn: "M_SanPham",
-                        onDelete: ReferentialAction.NoAction);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -687,6 +687,7 @@ namespace DACS.Migrations
                 columns: table => new
                 {
                     M_KhachHang = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    FirebaseID = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
                     Ten_KhachHang = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Email_KhachHang = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     SDT_KhachHang = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
@@ -896,11 +897,11 @@ namespace DACS.Migrations
                     DanhSachHinhAnh = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     MaLoTonKho = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
                     TrangThaiXuLy = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    DoAmThucTe = table.Column<double>(type: "float", nullable: false),
-                    HeSoDoAm = table.Column<double>(type: "float", nullable: false),
-                    HeSoMuaVu = table.Column<double>(type: "float", nullable: false),
-                    PhiVanChuyen = table.Column<double>(type: "float", nullable: false),
-                    DonGiaThuMua = table.Column<double>(type: "float", nullable: false),
+                    DoAmThucTe = table.Column<double>(type: "float", nullable: true),
+                    HeSoDoAm = table.Column<double>(type: "float", nullable: true),
+                    HeSoMuaVu = table.Column<double>(type: "float", nullable: true),
+                    PhiVanChuyen = table.Column<double>(type: "float", nullable: true),
+                    DonGiaThuMua = table.Column<double>(type: "float", nullable: true),
                     DonHangM_DonHang = table.Column<string>(type: "nvarchar(10)", nullable: true),
                     QuanLyM_QuanLy = table.Column<string>(type: "nvarchar(10)", nullable: true)
                 },

@@ -11,6 +11,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,9 +57,13 @@ builder.Services.ConfigureApplicationCookie(options => {
     options.LogoutPath = $"/Identity/Account/Logout";
     options.LogoutPath = $"/Identity/Account/AccessDenied";
 });
+string path = Path.Combine(Directory.GetCurrentDirectory(), "firebase_config.json");
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
 
-// Add services to the container.
-
+FirebaseApp.Create(new AppOptions()
+{
+    Credential = GoogleCredential.FromFile(path)
+});
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
@@ -72,6 +78,7 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.Configure<ESmsSettings>(builder.Configuration.GetSection("ESmsSettings"));
 builder.Services.AddTransient<ISmsService, ESmsService>();
+builder.Services.AddScoped<FirebaseSyncService>();
 builder.Services.AddHttpClient();
 //builder.WebHost.UseUrls("http://0.0.0.0:5001");//chạy ebsite
 
@@ -92,7 +99,8 @@ app.MapHub<ChatHub>("Hubs/ChatHub");
 app.UseSession();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseAuthentication(); ;
+app.UseAuthentication();
+app.MapControllers();
 app.UseAuthorization();
 app.MapRazorPages();
 

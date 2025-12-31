@@ -175,6 +175,11 @@ namespace DACS.Models.ViewModels // <<< Thay namespace cho đúng với project 
         [Display(Name = "Tôi đã đọc và đồng ý với các Điều Khoản Cam Kết Cung Cấp Phụ Phẩm.")]
         [Compare(nameof(DieuKienPhaiBangTrue), ErrorMessage = "Bạn phải đồng ý với cam kết để gửi yêu cầu.")]
         public bool DaDongYCamKet { get; set; }
+        public double? DoAmThucTe { get; set; } // Map với input độ ẩm
+        public double? HeSoMuaVu { get; set; }
+        public double? HeSoDoAm { get; set; }
+        public double? PhiVanChuyen { get; set; }
+        public double? DonGiaThuMua { get; set; }
 
         // 2. Thêm thuộc tính "giả" này
         // Thuộc tính này luôn trả về 'true' để so sánh

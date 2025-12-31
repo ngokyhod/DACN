@@ -130,19 +130,19 @@
                                     <span asp-validation-for="ByproductUnit" class="text-danger field-validation-error"></span>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="MoistureInput" class="form-label">Độ ẩm ước tính</label>
-                                <div class="input-group">
-                                    <input type="number" id="MoistureInput" name="MoisturePercentage" class="form-control"
-                                           placeholder="Nhập số (VD: 15)" min="0" max="100" step="0.1">
-                                    <span class="input-group-text">%</span>
+                            <div class="mb-3 bg-light p-3 rounded border">
+                                <label for="MoistureInput" class="form-label fw-bold">
+                                    <i class="fas fa-tint text-primary"></i> Độ ẩm của hàng:
+                                    <span id="MoistureDisplay" class="fs-5 text-primary">15%</span>
+                                </label>
 
-                                    <button class="btn btn-outline-secondary" type="button" title="Dự đoán độ ẩm qua ảnh" onclick="alert('Tính năng đang phát triển!')">
-                                        <i class="fas fa-camera"></i>
-                                    </button>
-                                </div>
-                                <div class="form-text text-muted" style="font-size: 0.85em;">
-                                    <i class="fas fa-info-circle"></i> Độ ẩm càng thấp, giá thu mua càng cao.
+                                <input type="range" class="form-range"
+                                       id="MoistureInput"
+                                       name="MoisturePercentage"
+                                       min="5" max="40" step="0.5" value="15">
+
+                                <div id="MoistureStatus" class="mt-2 small fst-italic fw-bold text-success">
+                                    <i class="fas fa-check"></i> Hàng khô ráo, đạt chuẩn
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -191,6 +191,10 @@
                                 </label>
                                 <span asp-validation-for="DaDongYCamKet" class="text-danger field-validation-error d-block"></span>
                             </div>
+                            <input type="hidden" id="hdnHeSoMuaVu" name="HeSoMuaVu" value="1" />
+                            <input type="hidden" id="hdnHeSoDoAm" name="HeSoDoAm" value="1" />
+                            <input type="hidden" id="hdnPhiVanChuyen" name="PhiVanChuyen" value="0" />
+                            <input type="hidden" id="hdnDonGiaThuMua" name="DonGiaThuMua" value="0" />
                             <div class="d-flex justify-content-center flex-wrap gap-3 mt-3">
                                 <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane me-2"></i> Yêu cầu Thu gom</button>
                                 <button type="reset" class="btn btn-outline-danger"><i class="fas fa-redo me-2"></i> Làm mới Form</button>
@@ -251,6 +255,48 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places"></script>
 
     @await Html.PartialAsync("_ValidationScriptsPartial") @* Script validation *@
+    <script>
+        // --- ĐOẠN CODE XỬ LÝ THANH TRƯỢT ĐỘ ẨM ---
+        const slider = document.getElementById("MoistureInput");
+        const display = document.getElementById("MoistureDisplay");
+        const status = document.getElementById("MoistureStatus");
+
+        // Hàm cập nhật giao diện khi kéo
+        function updateMoistureUI() {
+            const val = parseFloat(slider.value);
+            display.innerText = val + "%";
+
+            // Logic hiển thị trạng thái cho nông dân dễ hiểu
+            if (val <= 12) {
+                status.className = "mt-2 small fst-italic fw-bold text-warning";
+                status.innerHTML = '<i class="fas fa-fire"></i> Rất khô ';
+            }
+            else if (val > 12 && val <= 16) {
+                status.className = "mt-2 small fst-italic fw-bold text-success";
+                status.innerHTML = '<i class="fas fa-check-circle"></i> Đạt chuẩn, phơi nắng tốt ';
+            }
+            else if (val > 16 && val <= 22) {
+                status.className = "mt-2 small fst-italic fw-bold text-primary";
+                status.innerHTML = '<i class="fas fa-cloud"></i> Hơi ẩm, mới gặt ';
+            }
+            else {
+                status.className = "mt-2 small fst-italic fw-bold text-danger";
+                status.innerHTML = '<i class="fas fa-water"></i> Ướt, dính mưa ';
+            }
+
+            // Gọi lại hàm kiểm tra điều kiện để mở khóa nút AI nếu cần
+            if (typeof checkConditions === "function") {
+                checkConditions();
+            }
+        }
+
+        // Lắng nghe sự kiện khi nông dân kéo thanh trượt
+        slider.addEventListener("input", updateMoistureUI);
+
+        // Chạy 1 lần lúc mới vào trang để hiển thị mặc định
+        updateMoistureUI();
+        // ------------------------------------------
+    </script>
     @* AI gọi ý *@
     <script>
         const aiCircle = document.getElementById("aiCircle");

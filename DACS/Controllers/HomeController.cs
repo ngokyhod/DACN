@@ -136,50 +136,55 @@ namespace DACS.Controllers
         {
             string traLoi = "Xin lỗi, tôi chưa hiểu câu hỏi này.";
 
-            using (var httpClient = new HttpClient())
-            {
-                var formData = new Dictionary<string, string> { { "message", message } };
-                var content = new FormUrlEncodedContent(formData);
-
-                // Gửi sang API Python
-                var response = await httpClient.PostAsync("http://127.0.0.1:5000/predict", content);
-
-                if (response.IsSuccessStatusCode)
+           
+                using (var httpClient = new HttpClient())
                 {
-                    var result = await response.Content.ReadAsStringAsync();
-                    dynamic json = Newtonsoft.Json.JsonConvert.DeserializeObject(result);
-                    traLoi = json.response;
-                }
-            }
+                    // Gọi sang Python Flask (Localhost)
+                    var formData = new Dictionary<string, string> { { "message", message } };
+                    var content = new FormUrlEncodedContent(formData);
+                    var response = await httpClient.PostAsync("http://127.0.0.1:5000/predict", content);
 
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var result = await response.Content.ReadAsStringAsync();
+                        dynamic json = Newtonsoft.Json.JsonConvert.DeserializeObject(result);
+                        traLoi = json.response;
+                    }
+                }
+           
             // Lưu lịch sử chat
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(kh => kh.UserId == userId);
+                var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(kh => kh.UserId == userId);
 
-            if (khachHang != null)
-            {
-                _context.ChatHistory.Add(new ChatHistory
+                if (khachHang != null)
                 {
-                    CauHoi = message,
-                    CauTraLoi = traLoi,
-                    NgayChat = DateTime.Now,
-                    M_KhachHang = khachHang.M_KhachHang
-                });
-                await _context.SaveChangesAsync();
-            }
-
-            return Json(new { response = traLoi });
+                    _context.ChatHistory.Add(new ChatHistory
+                    {
+                        CauHoi = message,
+                        CauTraLoi = traLoi,
+                        NgayChat = DateTime.Now,
+                        M_KhachHang = khachHang.M_KhachHang
+                    });
+                    await _context.SaveChangesAsync();
+                }
+ 
+                return Json(new { response = traLoi });
+           
         }
 
 
 
         [HttpPost("api/chat/upload")]
-        public async Task<IActionResult> UploadImage(IFormFile file)
+        public async Task<IActionResult> ChatUpload(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { reply = "Không có ảnh nào được gửi lên." });
 
-            var uploadPath = Path.Combine("wwwroot/images/Uploads", file.FileName);
+            // 1. Lưu ảnh tạm vào wwwroot/images/Uploads
+            var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/Uploads", fileName);
+
+            // Tạo thư mục nếu chưa có
             Directory.CreateDirectory(Path.GetDirectoryName(uploadPath));
 
             using (var stream = new FileStream(uploadPath, FileMode.Create))
@@ -187,37 +192,45 @@ namespace DACS.Controllers
                 await file.CopyToAsync(stream);
             }
 
-            string pythonExe = @"C:\Users\hoa23\AppData\Local\Programs\Python\Python312\python.exe"; // đường dẫn Python
-            string scriptPath = @"D:\Doancs(important)\2025-05-24\dacs\DACS\Services\compare_images.py"; // script so sánh
-            string datasetFolder = @"D:\Doancs(important)\2025-05-24\dacs\DACS\wwwroot\images\Products";
+            // 2. Gọi Service C# để so sánh
+            string datasetFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/Products");
 
-            // Gọi Python để so sánh ảnh
-            var process = new System.Diagnostics.Process();
-            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            // Khởi tạo service (Có thể dùng Dependency Injection nếu muốn chuyên nghiệp hơn)
+            var imageService = new DACS.Services.ImageService();
+
+            // --- CHẠY SO SÁNH ---
+            var result = imageService.FindBestMatch(uploadPath, datasetFolder);
+
+            // 3. Xử lý kết quả
+            string reply = "";
+
+            // Ngưỡng chấp nhận (Ví dụ: giống > 40%)
+            if (result != null && result.Score > 0.4)
             {
-                FileName = pythonExe,
-                Arguments = $"\"{scriptPath}\" \"{uploadPath}\" \"{datasetFolder}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                // Tìm trong CSDL
+                // Lưu ý: So sánh tên file (dùng Contains vì tên file trong DB có thể dài hơn)
+                var matchedProduct = await _context.SanPhams
+                    .FirstOrDefaultAsync(p => p.AnhSanPham.Contains(result.FileName));
 
-            process.Start();
-            string stdout = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
+                if (matchedProduct != null)
+                {
+                    reply = $"Tôi tìm thấy: {matchedProduct.TenSanPham} (Độ giống: {Math.Round(result.Score * 100)}%).\n{matchedProduct.MoTa}";
+                }
+                else
+                {
+                    reply = $"Ảnh giống với file '{result.FileName}' nhưng chưa có thông tin sản phẩm.";
+                }
+            }
+            else
+            {
+                reply = "Không tìm thấy sản phẩm nào giống với ảnh của bạn.";
+            }
 
-            string firstLine = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
-            string bestMatch = firstLine ?? "None";
-            if (bestMatch == "None" || string.IsNullOrEmpty(bestMatch))
-                return Ok(new { reply = "Không tìm thấy phụ phẩm phù hợp." });
-
-            // Tìm mô tả phụ phẩm trong CSDL
-            var matchedProduct = await _context.SanPhams
-                .FirstOrDefaultAsync(p => p.AnhSanPham.Contains(bestMatch));
-
-            string reply = matchedProduct != null
-                ? $"Ảnh của bạn giống với phụ phẩm: {matchedProduct.TenSanPham}. Mô tả: {matchedProduct.MoTa}"
-                : $"Ảnh của bạn giống với: {bestMatch} (chưa có mô tả trong CSDL).";
+            // Xóa ảnh tạm để đỡ rác máy
+            if (System.IO.File.Exists(uploadPath))
+            {
+                System.IO.File.Delete(uploadPath);
+            }
 
             return Ok(new { reply });
         }
