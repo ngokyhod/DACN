@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using YourNameSpace.Extensions; // Thêm using
 using DACS.Services;
 using DACS.PTTT;
+using Google.Cloud.Firestore;
 
 namespace DACS.Controllers
 {
@@ -25,13 +26,14 @@ namespace DACS.Controllers
         private readonly ILogger<ShoppingCartController> _logger;
         private readonly IEmailService _emailService;
         private readonly ISmsService _smsService;
-
+        private readonly FirebaseSyncService _firebaseSync;
         public ShoppingCartController(ApplicationDbContext context, 
             UserManager<ApplicationUser> userManager, 
             ISanPhamRepository productRepository, 
             ILogger<ShoppingCartController> logger,
             IEmailService emailService,
-            ISmsService smsService)
+            ISmsService smsService,
+        FirebaseSyncService firebaseSync)
         {
             _productRepository = productRepository;
             _context = context;
@@ -39,6 +41,7 @@ namespace DACS.Controllers
             _logger = logger;
             _emailService = emailService;
             _smsService = smsService;
+            _firebaseSync = firebaseSync;
         }
 
         public IActionResult Checkout() 
@@ -93,7 +96,7 @@ namespace DACS.Controllers
 
             // (Phần logic tạo Đơn Hàng, Vận Đơn, Chi Tiết của bạn đã ổn, giữ nguyên)
             // (Lưu ý: Bạn nên bọc toàn bộ phần này trong một Transaction)
-
+           
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -154,7 +157,69 @@ namespace DACS.Controllers
                 await _context.SaveChangesAsync();
 
                 // (Lưu ý: Logic trừ kho FIFO nên được gọi ở đây, nhưng bạn đang gọi nó ở Controller khác)
+                try
+                {
+                    // A. Chuẩn bị danh sách Items (Sản phẩm)
+                    var itemsList = new List<Dictionary<string, object>>();
 
+                    foreach (var item in cart.Items)
+                    {
+                        // Lấy ảnh sản phẩm từ DB để đảm bảo link đúng
+                        var imgUrl = await _context.SanPhams
+                            .Where(a => a.M_SanPham == item.ProductId)
+                            .Select(a => a.AnhSanPham)
+                            .FirstOrDefaultAsync();
+
+                        // Format link ảnh nếu cần (thêm domain nếu là đường dẫn tương đối)
+                        // Ví dụ: nếu link là "/images/..." thì thêm "https://localhost:..."
+                        string fullImgUrl = string.IsNullOrEmpty(imgUrl)
+                            ? ""
+                            : (imgUrl.StartsWith("http") ? imgUrl : $"{Request.Scheme}://{Request.Host}{imgUrl}");
+
+                        itemsList.Add(new Dictionary<string, object>
+                {
+                    { "productId", item.ProductId },
+                    { "productName", item.Name },
+                    { "quantity", item.Khoiluong }, // App Mobile dùng quantity cho khối lượng
+                    { "price", item.Price },
+                    { "imageUrl", fullImgUrl }
+                });
+                    }
+
+                    // B. Đóng gói dữ liệu Đơn hàng (Khớp với JSON mẫu của bạn)
+                    var firestoreData = new Dictionary<string, object>
+            {
+                { "uid", nguoiMuaProfile.FirebaseID ?? "" }, // QUAN TRỌNG: Để Mobile nhận biết đơn của ai
+                
+                { "maDonHang", order.M_DonHang },
+                { "ngayDat", Timestamp.GetCurrentTimestamp() }, // Thời gian hiện tại của Firestore
+                
+                { "trangThai", "Chờ xác nhận" },
+                { "trangThaiThanhToan", "Chưa thanh toán" },
+
+                { "tenNguoiNhan", order.Tendathang },
+                { "sdtNguoiNhan", order.SoDienThoaidathang },
+                { "diaChiGiaoHang", order.ShippingAddress },
+                { "ghiChu", order.Notes ?? "" },
+
+                { "phuongThucTT", order.M_PhuongThuc },
+                { "tongTien", order.TotalPrice },
+
+                { "items", itemsList } // Mảng sản phẩm đã tạo ở bước A
+            };
+
+                    // C. Gọi Service đẩy lên Firebase
+                    // Chỉ đẩy nếu User có FirebaseID (tức là có dùng App Mobile)
+                    if (!string.IsNullOrEmpty(nguoiMuaProfile.FirebaseID))
+                    {
+                        await _firebaseSync.AddDonHangToFirestoreAsync(firestoreData);
+                    }
+                }
+                catch (Exception fireEx)
+                {
+                    // Chỉ log lỗi, KHÔNG rollback SQL vì SQL đã thành công rồi.
+                    Console.WriteLine($"[Lỗi Đồng bộ Firebase]: {fireEx.Message}");
+                }
                 await transaction.CommitAsync(); // Hoàn thành
                 // <<< ============ GỬI EMAIL SAU KHI MUA HÀNG THÀNH CÔNG ============ >>>
                 try

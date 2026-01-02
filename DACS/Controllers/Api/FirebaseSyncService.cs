@@ -3,7 +3,7 @@ using Google.Cloud.Firestore; // Cần cài thêm gói Google.Cloud.Firestore n�
 
 public class FirebaseSyncService
 {
-    // 1. Đồng bộ tài khoản sang Firebase Auth
+    private readonly FirestoreDb _firestoreDb;
     public async Task<string> CreateFirebaseUserAsync(string email, string password, string displayName, string phoneNumber)
     {
         try
@@ -63,6 +63,46 @@ public class FirebaseSyncService
             Console.WriteLine($"[Firestore LỖI]: {ex.Message}");
         }
     }
+    public async Task SyncProductsToFirestoreAsync(List<Dictionary<string, object>> productList)
+    {
+        if (_firestoreDb == null) return;
+        try
+        {
+            CollectionReference productsCol = _firestoreDb.Collection("Products");
+
+            // BatchWrite để ghi nhanh hơn
+            WriteBatch batch = _firestoreDb.StartBatch();
+            int count = 0;
+
+            foreach (var product in productList)
+            {
+                string productId = product["m_SanPham"].ToString();
+                DocumentReference docRef = productsCol.Document(productId);
+
+                // Thêm vào hàng đợi batch
+                batch.Set(docRef, product, SetOptions.MergeAll);
+                count++;
+
+                // Firestore giới hạn 500 writes/batch, nếu nhiều quá thì commit dần
+                if (count >= 400)
+                {
+                    await batch.CommitAsync();
+                    batch = _firestoreDb.StartBatch();
+                    count = 0;
+                }
+            }
+
+            // Commit số còn lại
+            if (count > 0) await batch.CommitAsync();
+
+            Console.WriteLine($"[Firestore] Đã đồng bộ xong {productList.Count} sản phẩm.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Firestore Lỗi Product]: {ex.Message}");
+        }
+    }
+
     public async Task AddThuGomToFirestoreAsync(Dictionary<string, object> data)
     {
         try
@@ -83,6 +123,27 @@ public class FirebaseSyncService
             Console.WriteLine($"[Firestore LỖI]: {ex.Message}");
             // Ném lỗi để bên Controller bắt được và log lại
             throw;
+        }
+    }
+    public async Task AddDonHangToFirestoreAsync(Dictionary<string, object> data)
+    {
+        try
+        {
+            // 1. Kết nối Firestore (Dùng ProjectID của bạn: ppnongnghiep)
+            FirestoreDb db = FirestoreDb.Create("ppnongnghiep");
+
+            // 2. Tham chiếu Collection "DonHang"
+            CollectionReference colRef = db.Collection("DonHang");
+
+            // 3. Thêm document mới
+            await colRef.AddAsync(data);
+
+            Console.WriteLine($"[Firestore] Đã đồng bộ Đơn Hàng {data["maDonHang"]} thành công.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Firestore LỖI]: {ex.Message}");
+            // Chỉ log lỗi, không ném exception để tránh làm crash luồng chính của Web
         }
     }
 }

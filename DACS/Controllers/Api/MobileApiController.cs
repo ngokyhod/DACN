@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using DACS.Controllers.Api;
 using DACS.Models; // Hãy đảm bảo namespace này đúng với project của bạn
+using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +14,12 @@ namespace DACS.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
-        public MobileApiController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        private readonly FirebaseSyncService _firebaseSync;
+        public MobileApiController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, FirebaseSyncService firebaseSync)
         {
             _context = context;
             _userManager = userManager;
+            _firebaseSync = firebaseSync;
         }
 
         // --- 1. DANH SÁCH SẢN PHẨM ---
@@ -82,7 +85,62 @@ namespace DACS.Controllers
                 }).ToList()
             });
         }
-//mobi đang ký
+        [HttpPost("sync-products")]
+        public async Task<IActionResult> SyncAllProductsToFirebase()
+        {
+            try
+            {
+                // 1. Lấy dữ liệu từ SQL (Logic giống hệt hàm GetProducts của bạn)
+                var products = await _context.SanPhams
+                    .Include(sp => sp.LoaiSanPham)
+                    .Include(sp => sp.DonViTinh)
+                    // Nếu bạn có bảng ảnh riêng (AnhSanPhams) thì Include thêm
+                    // .Include(sp => sp.AnhSanPhams) 
+                    .ToListAsync();
+
+                // 2. Chuẩn bị dữ liệu gửi lên Firebase
+                var listToSync = new List<Dictionary<string, object>>();
+
+                foreach (var sp in products)
+                {
+                    // Xử lý ảnh: Nếu link ảnh là tương đối (/images/...), thêm domain vào
+                    // Giả sử sp.AnhSanPham là chuỗi link ảnh chính
+                    string imgUrl = sp.AnhSanPham;
+                    if (!string.IsNullOrEmpty(imgUrl) && !imgUrl.StartsWith("http"))
+                    {
+                        imgUrl = $"{Request.Scheme}://{Request.Host}{imgUrl}";
+                    }
+
+                    // Map đúng tên trường mà Flutter App đang dùng (m_SanPham, tenSanPham...)
+                    var productData = new Dictionary<string, object>
+            {
+                { "m_SanPham", sp.M_SanPham },
+                { "tenSanPham", sp.TenSanPham },
+                { "gia", sp.Gia },
+                { "anhSanPham", imgUrl ?? "" }, // Link ảnh đầy đủ
+                { "tenLoai", sp.LoaiSanPham != null ? sp.LoaiSanPham.TenLoai : "" },
+                { "tenDVT", sp.DonViTinh != null ? sp.DonViTinh.TenLoaiTinh : "kg" },
+                { "moTa", sp.MoTa ?? "" },
+                
+                // Thêm trường hỗ trợ tìm kiếm/lọc trên Firebase nếu cần
+                { "searchName", sp.TenSanPham.ToLower() }, // Để search không phân biệt hoa thường
+                { "lastUpdated", Timestamp.GetCurrentTimestamp() }
+            };
+
+                    listToSync.Add(productData);
+                }
+
+                // 3. Gọi Service đẩy lên Firebase
+                await _firebaseSync.SyncProductsToFirestoreAsync(listToSync);
+
+                return Ok(new { message = $"Đã đồng bộ thành công {listToSync.Count} sản phẩm lên Firebase." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi đồng bộ: " + ex.Message });
+            }
+        }
+        //mobi đang ký
         [HttpPost("sync-user")]
         public async Task<IActionResult> SyncUserFromMobile([FromBody] RegisterRequestDto req)
         {
@@ -322,23 +380,22 @@ namespace DACS.Controllers
         [HttpPost("tao-don-hang")]
         public async Task<IActionResult> CreateOrder([FromBody] DonHangRequestDto req)
         {
-            // 1. KIỂM TRA DỮ LIỆU ĐẦU VÀO
+            // 1. KIỂM TRA DỮ LIỆU CƠ BẢN
             if (req == null || req.ChiTietDonHangs == null || !req.ChiTietDonHangs.Any())
             {
-                return BadRequest("Dữ liệu đơn hàng rỗng.");
+                return BadRequest("Dữ liệu đơn hàng rỗng hoặc không hợp lệ.");
             }
 
-            // 2. TÌM KHÁCH HÀNG (Thay vì User.Id của Identity thì dùng FirebaseID)
-            // Code MVC: var nguoiMuaProfile = ... Where(UserId == user.Id)
+            // 2. TÌM KHÁCH HÀNG (Qua FirebaseID)
             var khachHang = await _context.KhachHangs
                 .FirstOrDefaultAsync(k => k.FirebaseID == req.UserId);
 
             if (khachHang == null)
             {
-                return BadRequest($"Không tìm thấy khách hàng có FirebaseID: {req.UserId}");
+                return BadRequest($"Không tìm thấy khách hàng. Vui lòng đăng xuất và đăng nhập lại.");
             }
 
-            // 3. KIỂM TRA TỒN KHO (Giống hệt MVC)
+            // 3. KIỂM TRA TỒN KHO (Giống Web)
             var errorMessages = new List<string>();
             foreach (var item in req.ChiTietDonHangs)
             {
@@ -357,27 +414,44 @@ namespace DACS.Controllers
                 return BadRequest(new { message = "Hết hàng", errors = errorMessages });
             }
 
-            // 4. BẮT ĐẦU TRANSACTION
+            // 4. BẮT ĐẦU TRANSACTION (An toàn dữ liệu)
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // ======= A. XỬ LÝ VẬN ĐƠN (Giống MVC) ========
-                string vanDonId = "VD" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper();
+                // ======= A. XỬ LÝ PHƯƠNG THỨC THANH TOÁN (FIX LỖI KHÓA NGOẠI) ========
+                string maPhuongThuc = string.IsNullOrEmpty(req.M_PhuongThuc) ? "PT001" : req.M_PhuongThuc;
 
-                // Kiểm tra trùng (Logic MVC)
+                // Kiểm tra xem mã này có thật trong DB không
+                var ptExist = await _context.PhuongThucThanhToans.FindAsync(maPhuongThuc);
+                if (ptExist == null)
+                {
+                    // NẾU CHƯA CÓ -> TẠO MỚI LUÔN ĐỂ KHÔNG BỊ LỖI
+                    ptExist = new PhuongThucThanhToan
+                    {
+                        M_PhuongThuc = "PT001",
+                        TenPhuongThuc = "Thanh toán khi nhận hàng (COD)"
+                    };
+                    _context.PhuongThucThanhToans.Add(ptExist);
+                    await _context.SaveChangesAsync(); // Lưu ngay
+                    maPhuongThuc = "PT001"; // Gán lại mã chuẩn
+                }
+
+                // ======= B. XỬ LÝ VẬN ĐƠN (Giống Web) ========
+                string vanDonId = "VD" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper();
                 var vanChuyenExist = await _context.VanChuyens.FirstOrDefaultAsync(vc => vc.M_VanDon == vanDonId);
+
                 if (vanChuyenExist == null)
                 {
                     vanChuyenExist = new VanChuyen
                     {
                         M_VanDon = vanDonId,
-                        DonViVanChuyen = "DHL", 
+                        DonViVanChuyen = "Giao hàng tiêu chuẩn"
                     };
                     _context.VanChuyens.Add(vanChuyenExist);
-                    await _context.SaveChangesAsync(); // <--- LƯU NGAY: Để mã VD tồn tại trong DB
+                    await _context.SaveChangesAsync(); // Lưu ngay để có mã dùng cho Đơn Hàng
                 }
 
-                // ======= B. TẠO MÃ ĐƠN HÀNG (Giống MVC) ========
+                // ======= C. TẠO MÃ ĐƠN HÀNG (Logic tăng dần giống Web) ========
                 var lastOrder = await _context.DonHangs.OrderByDescending(o => o.M_DonHang).FirstOrDefaultAsync();
                 int nextNumber = 1;
                 if (lastOrder != null && !string.IsNullOrEmpty(lastOrder.M_DonHang) && lastOrder.M_DonHang.StartsWith("DH"))
@@ -390,74 +464,81 @@ namespace DACS.Controllers
                 }
                 string maDonHangMoi = "DH" + nextNumber.ToString("D6");
 
-                // ======= C. XỬ LÝ PHƯƠNG THỨC THANH TOÁN (Bổ sung để tránh lỗi) ========
-                // Code MVC lấy từ Dropdown, API lấy từ JSON string. Cần check kỹ.
-                string maPhuongThuc = req.M_PhuongThuc;
-                if (string.IsNullOrEmpty(maPhuongThuc)) maPhuongThuc = "PT001"; // Mặc định nếu rỗng
+                // ======= D. TẠO ĐƠN HÀNG MASTER ========
+                // Validate dữ liệu bắt buộc (Tránh lỗi Required)
+                string tenNguoiNhan = string.IsNullOrEmpty(req.Tendathang) ? khachHang.Ten_KhachHang : req.Tendathang;
+                string sdtNguoiNhan = string.IsNullOrEmpty(req.SoDienThoaidathang) ? khachHang.SDT_KhachHang : req.SoDienThoaidathang;
 
-                // Kiểm tra tồn tại trong DB chưa
-                bool ptExists = await _context.PhuongThucThanhToans.AnyAsync(p => p.M_PhuongThuc == maPhuongThuc);
-                if (!ptExists) maPhuongThuc = "PT001"; // Fallback về COD nếu mã gửi lên sai
+                // Tính tổng tiền server-side
+                decimal tongTienServer = req.ChiTietDonHangs.Sum(x => (decimal)x.SoLuong * (decimal)x.DonGia);
 
-                // ======= D. TẠO ĐƠN HÀNG MASTER (Map theo MVC) ========
                 var donHang = new DonHang
                 {
                     M_DonHang = maDonHangMoi,
 
-                    // --- CÁC KHÓA NGOẠI ---
-                    M_VanDon = vanChuyenExist.M_VanDon,  // Lấy từ biến vừa tạo ở bước A
-                    M_KhachHang = khachHang.M_KhachHang, // Lấy từ biến tìm được ở bước 2
+                    // Khóa ngoại
+                    M_VanDon = vanChuyenExist.M_VanDon,
+                    M_KhachHang = khachHang.M_KhachHang,
                     M_PhuongThuc = maPhuongThuc,
 
-                    // --- THÔNG TIN NGƯỜI NHẬN ---
-                    Tendathang = req.Tendathang,
-                    SoDienThoaidathang = req.SoDienThoaidathang,
-                    ShippingAddress = req.ShippingAddress,
+                    // Thông tin bắt buộc [Required]
+                    Tendathang = tenNguoiNhan,
+                    SoDienThoaidathang = sdtNguoiNhan,
+                    ShippingAddress = req.ShippingAddress ?? "Tại cửa hàng",
                     Notes = req.Notes,
 
-                    // --- THÔNG TIN KHÁC ---
                     NgayDat = DateTime.Now,
-                    // Tính lại tổng tiền giống MVC logic
-                    TotalPrice = (float)req.ChiTietDonHangs.Sum(i => (decimal)i.SoLuong * (decimal)i.DonGia),
-
-                    TrangThai = "Chờ xác nhận", // Giống MVC
+                    TotalPrice = (float)tongTienServer,
+                    TrangThai = "Chờ xác nhận",
                     TrangThaiThanhToan = "Chưa thanh toán",
                     DaTruTonKho = false
                 };
 
                 _context.DonHangs.Add(donHang);
-                await _context.SaveChangesAsync(); // LƯU ĐƠN HÀNG
+                await _context.SaveChangesAsync();
 
-                // ======= E. TẠO CHI TIẾT ĐƠN HÀNG (Giống MVC) ========
+                // ======= E. TẠO CHI TIẾT ĐƠN HÀNG ========
                 foreach (var item in req.ChiTietDonHangs)
                 {
+                    // 1. Kiểm tra M_SanPham từ App gửi lên
+                    string maSanPham = item.M_SanPham;
+                    if (string.IsNullOrEmpty(maSanPham))
+                    {
+                        // Nếu App gửi thiếu, thử lấy từ TenSanPham hoặc bỏ qua (tùy logic)
+                        // Ở đây ta báo lỗi hoặc log lại
+                        throw new Exception($"Sản phẩm '{item.TenSanPham}' bị thiếu Mã (M_SanPham).");
+                    }
+
+                    // 2. Tính thành tiền
+                    long thanhTienItem = (long)((decimal)item.SoLuong * item.DonGia);
+
                     var chiTiet = new ChiTietDatHang
                     {
                         M_CTDatHang = "CT" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper(),
 
-                        // Khóa ngoại
+                        // --- KHÓA NGOẠI ---
                         M_DonHang = donHang.M_DonHang,
-                        M_KhachHang = khachHang.M_KhachHang, // <--- QUAN TRỌNG: MVC có dòng này, API cũng phải có
-                        M_SanPham = item.M_SanPham,
+                        M_KhachHang = khachHang.M_KhachHang,
+                        M_SanPham = maSanPham,
 
-                        // Dữ liệu
-                        ProductId = item.M_SanPham, // MVC của bạn lưu cả 2 cột này
-                        Khoiluong = (float)item.SoLuong, // Ép kiểu về double như MVC
-                        Quantity = (int)item.SoLuong,     // Lưu thêm cột int nếu cần
+                        // --- SỬA LỖI: GÁN CỘT ProductId BẮT BUỘC ---
+                        ProductId = maSanPham, // <--- DÒNG QUAN TRỌNG NÀY PHẢI CÓ
 
-                        GiaDatHang = (long)item.DonGia,
-
-                        // Logic tính tiền ép kiểu giống MVC
-                        TongTien = (long)((decimal)item.SoLuong * (decimal)item.DonGia),
+                        // --- DỮ LIỆU KHÁC ---
+                        Khoiluong = (float)item.SoLuong, // Ép kiểu double
+                        Quantity = (int)item.SoLuong,     // Ép kiểu int
+                        GiaDatHang = item.DonGia,         // decimal
+                        TongTien = thanhTienItem,         // long
 
                         NgayTao = DateTime.Now,
                         TrangThaiDonHang = "Chờ xác nhận"
                     };
+
                     _context.ChiTietDatHangs.Add(chiTiet);
                 }
-                await _context.SaveChangesAsync(); // LƯU CHI TIẾT
+                await _context.SaveChangesAsync();
 
-                // ======= F. COMMIT ========
+                // ======= F. HOÀN TẤT ========
                 await transaction.CommitAsync();
 
                 return Ok(new
@@ -471,16 +552,10 @@ namespace DACS.Controllers
             {
                 await transaction.RollbackAsync();
 
-                // --- LOGIC BẮT LỖI SÂU HƠN ---
-                // Lấy lỗi gốc (InnerException) để biết cột nào bị NULL/Lỗi
-                var innerMessage = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-
-                // Trả về lỗi chi tiết cho Android xem
-                return StatusCode(500, new
-                {
-                    message = "Lỗi lưu SQL: " + innerMessage,
-                    details = ex.ToString()
-                });
+                // TRẢ VỀ LỖI CHI TIẾT (QUAN TRỌNG ĐỂ DEBUG)
+                // Nếu lỗi do Khóa ngoại, InnerException sẽ nói rõ là bảng nào
+                var errorMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                return StatusCode(500, new { message = "Lỗi Server: " + errorMsg });
             }
         }
     }

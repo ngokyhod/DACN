@@ -54,7 +54,7 @@
     {
         public string M_SanPham { get; set; }
         public string TenSanPham { get; set; }
-        public double SoLuong { get; set; } // Mobile gửi double (do logic kg)
-        public decimal DonGia { get; set; }
+        public float SoLuong { get; set; } // Mobile gửi double (do logic kg)
+        public long DonGia { get; set; }
     }
 }
