@@ -132,32 +132,35 @@ namespace DACS.Services
             catch { return 0.0; }
         }
         // --- HÀM TỔNG HỢP: CHẠY HẾT CÁC THUẬT TOÁN ---
-        public ImageResult FindBestMatch(string uploadedPath, string datasetFolder)
+        public ImageResult? FindBestMatch(string uploadedPath, string datasetFolder)
         {
             var results = new List<ImageResult>();
+
+            // Kiểm tra thư mục có tồn tại không
+            if (!Directory.Exists(datasetFolder)) return null;
+
             var files = Directory.GetFiles(datasetFolder, "*.*")
                 .Where(s => s.EndsWith(".jpg") || s.EndsWith(".png") || s.EndsWith(".jpeg"));
 
             foreach (var file in files)
             {
-                // Trọng số (Bạn có thể chỉnh lại cho vừa ý)
-                // Hash: Nhanh, loại trừ ảnh khác hẳn
-                // Hist: Màu sắc
-                // Feature: Chi tiết
-                double wHist = 0.35; 
-                double wText = 0.35; 
-                double wFeat = 0.20; 
-                double wHash = 0.10;
+                // Trọng số (Bạn có thể điều chỉnh lại)
+                double wHist = 0.35; // Màu sắc
+                double wText = 0.35; // Kết cấu (sần sùi, mịn...)
+                double wFeat = 0.20; // Chi tiết đặc trưng (góc cạnh)
+                double wHash = 0.10; // Hình dáng tổng quát
 
                 double d1_Hash = CompareHash(uploadedPath, file);
                 double d2_Hist = CompareHistogram(uploadedPath, file);
                 double d3_Feat = CompareFeatures(uploadedPath, file);
                 double d4_Text = CompareTexture(uploadedPath, file);
+
                 // Tính điểm tổng hợp
                 double finalScore = (d1_Hash * wHash) +
-                             (d2_Hist * wHist) +
-                             (d3_Feat * wFeat) +
-                             (d4_Text * wText);
+                                    (d2_Hist * wHist) +
+                                    (d3_Feat * wFeat) +
+                                    (d4_Text * wText);
+
                 results.Add(new ImageResult
                 {
                     FileName = Path.GetFileName(file),
@@ -165,8 +168,23 @@ namespace DACS.Services
                 });
             }
 
-            // Lấy cái điểm cao nhất
-            return results.OrderByDescending(r => r.Score).FirstOrDefault();
+            // --- LOGIC MỚI: LỌC THEO NGƯỠNG ĐIỂM ---
+
+            // 1. Sắp xếp giảm dần (điểm cao nhất lên đầu)
+            var bestMatch = results.OrderByDescending(r => r.Score).FirstOrDefault();
+
+            // 2. Đặt ngưỡng tối thiểu (Ví dụ: 0.65 tức là giống 65%)
+            // Bạn nên test thử:
+            // - Nếu ảnh lung tung vẫn lọt qua -> Tăng lên 0.7 hoặc 0.75
+            // - Nếu ảnh đúng mà bị loại -> Giảm xuống 0.55 hoặc 0.6
+            double minThreshold = 0.55;
+
+            if (bestMatch != null && bestMatch.Score >= minThreshold)
+            {
+                return bestMatch; // Tìm thấy ảnh giống
+            }
+
+            return null; // Không có ảnh nào đủ giống (trả về null)
         }
     }
 }

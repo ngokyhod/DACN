@@ -57,4 +57,26 @@
         public float SoLuong { get; set; } // Mobile gửi double (do logic kg)
         public long DonGia { get; set; }
     }
+    public class ProductUpdateDto
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public long Price { get; set; }
+        public string Description { get; set; }
+    }
+    public class OrderStatusDto
+    {
+        public string MaDonHang { get; set; }
+        public string TrangThai { get; set; }
+        public string? DonViVanChuyen { get; set; }
+        // Thêm trường này (nếu bạn muốn gửi tổng khối lượng thực tế khi giao)
+        public double? KhoiLuongThucTe { get; set; }
+    }
+    public class ScrapStatusDto
+    {
+        public string RequestId { get; set; }   // M_YeuCau (Quan trọng: Sửa từ Id thành RequestId cho rõ)
+        public string Status { get; set; }      // TrangThai (Của bảng YeuCauThuGom)
+        public string? Date { get; set; }       // Ngày thực tế
+        public int? ActualWeight { get; set; } // Khối lượng thực tế (dùng để cộng kho)
+    }
 }

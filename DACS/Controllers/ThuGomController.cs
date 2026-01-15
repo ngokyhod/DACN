@@ -225,7 +225,7 @@ namespace DACS.Controllers
 
                     // D. Gọi Service đẩy lên Firebase
                     // Lưu ý: Cần Inject FirebaseSyncService vào Controller của bạn
-                    await _firebaseSync.AddThuGomToFirestoreAsync(firestoreData);
+                    await _firebaseSync.AddThuGomToFirestoreAsync(firestoreData, yeuCau.M_YeuCau);
                 }
                 catch (Exception fireEx)
                 {

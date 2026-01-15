@@ -177,14 +177,15 @@ namespace DACS.Controllers
         [HttpPost("api/chat/upload")]
         public async Task<IActionResult> ChatUpload(IFormFile file)
         {
+            // 1. Validate file đầu vào
             if (file == null || file.Length == 0)
                 return BadRequest(new { reply = "Không có ảnh nào được gửi lên." });
 
-            // 1. Lưu ảnh tạm vào wwwroot/images/Uploads
+            // 2. Lưu ảnh tạm người dùng gửi lên (để đem đi so sánh)
             var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
             var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/Uploads", fileName);
 
-            // Tạo thư mục nếu chưa có
+            // Tạo thư mục Uploads nếu chưa có
             Directory.CreateDirectory(Path.GetDirectoryName(uploadPath));
 
             using (var stream = new FileStream(uploadPath, FileMode.Create))
@@ -192,47 +193,66 @@ namespace DACS.Controllers
                 await file.CopyToAsync(stream);
             }
 
-            // 2. Gọi Service C# để so sánh
-            string datasetFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/Products");
-
-            // Khởi tạo service (Có thể dùng Dependency Injection nếu muốn chuyên nghiệp hơn)
-            var imageService = new DACS.Services.ImageService();
-
-            // --- CHẠY SO SÁNH ---
-            var result = imageService.FindBestMatch(uploadPath, datasetFolder);
-
-            // 3. Xử lý kết quả
-            string reply = "";
-
-            // Ngưỡng chấp nhận (Ví dụ: giống > 40%)
-            if (result != null && result.Score > 0.4)
+            try
             {
-                // Tìm trong CSDL
-                // Lưu ý: So sánh tên file (dùng Contains vì tên file trong DB có thể dài hơn)
-                var matchedProduct = await _context.SanPhams
-                    .FirstOrDefaultAsync(p => p.AnhSanPham.Contains(result.FileName));
+                // 3. Định nghĩa thư mục chứa kho ảnh gốc (Dataset) để so sánh
+                string datasetFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/Products");
 
-                if (matchedProduct != null)
+                // Khởi tạo Service (Nếu bạn đã đăng ký DI thì dùng _imageService, nếu chưa thì new)
+                var imageService = new DACS.Services.ImageService();
+
+                // --- GỌI HÀM TÌM KIẾM ---
+                // Hàm này sẽ trả về NULL nếu không có ảnh nào giống hoặc điểm thấp hơn ngưỡng quy định
+                var result = imageService.FindBestMatch(uploadPath, datasetFolder);
+
+                string reply = "";
+
+                // 4. Xử lý kết quả
+                if (result != null)
                 {
-                    reply = $"Tôi tìm thấy: {matchedProduct.TenSanPham} (Độ giống: {Math.Round(result.Score * 100)}%).\n{matchedProduct.MoTa}";
+                    // Tìm thấy ảnh giống trong folder -> Giờ tìm thông tin trong Database SQL
+                    // Logic: Tìm sản phẩm mà cột AnhSanPham có chứa tên file vừa tìm được
+                    var matchedProduct = await _context.SanPhams
+                        .FirstOrDefaultAsync(p => p.AnhSanPham != null && p.AnhSanPham.Contains(result.FileName));
+
+                    if (matchedProduct != null)
+                    {
+                        // Format câu trả lời
+                        reply = $"✅ Tôi tìm thấy: {matchedProduct.TenSanPham}\n" +
+                                $"- Độ chính xác: {Math.Round(result.Score * 100)}%\n" +
+                                $"- Giá tham khảo: {matchedProduct.Gia:N0} đ\n" +
+                                $"- Mô tả: {matchedProduct.MoTa}";
+                    }
+                    else
+                    {
+                        // Trường hợp: Có ảnh trong folder 'Products' nhưng Admin quên nhập vào SQL
+                        reply = $"Tôi nhận diện được ảnh này giống với sản phẩm '{result.FileName}' (Độ giống: {Math.Round(result.Score * 100)}%) nhưng không tìm thấy thông tin chi tiết trong cơ sở dữ liệu.";
+                    }
                 }
                 else
                 {
-                    reply = $"Ảnh giống với file '{result.FileName}' nhưng chưa có thông tin sản phẩm.";
+                    // FindBestMatch trả về null (do không giống hoặc thấp hơn ngưỡng 0.65)
+                    reply = "Xin lỗi, tôi không nhận diện được sản phẩm này trong kho. Bạn vui lòng chụp lại rõ hơn hoặc sản phẩm chưa được hỗ trợ.";
+                }
+
+                return Ok(new { reply });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { reply = $"Lỗi Server khi xử lý ảnh: {ex.Message}" });
+            }
+            finally
+            {
+                // 5. Dọn dẹp: Xóa ảnh tạm người dùng gửi lên để tránh đầy bộ nhớ Server
+                if (System.IO.File.Exists(uploadPath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(uploadPath);
+                    }
+                    catch { /* Bỏ qua lỗi xóa file nếu có */ }
                 }
             }
-            else
-            {
-                reply = "Không tìm thấy sản phẩm nào giống với ảnh của bạn.";
-            }
-
-            // Xóa ảnh tạm để đỡ rác máy
-            if (System.IO.File.Exists(uploadPath))
-            {
-                System.IO.File.Delete(uploadPath);
-            }
-
-            return Ok(new { reply });
         }
         [HttpPost]
         public async Task<IActionResult> SaveMessage([FromBody] ChatMessage message)

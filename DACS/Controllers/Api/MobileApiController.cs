@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using DACS.Controllers.Api;
 using DACS.Models; // Hãy đảm bảo namespace này đúng với project của bạn
+using DACS.Services;
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -15,11 +16,14 @@ namespace DACS.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly FirebaseSyncService _firebaseSync;
-        public MobileApiController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, FirebaseSyncService firebaseSync)
+        private readonly BlockchainService _blockchainService;
+        public MobileApiController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, FirebaseSyncService firebaseSync,
+            BlockchainService blockchainService)
         {
             _context = context;
             _userManager = userManager;
             _firebaseSync = firebaseSync;
+            _blockchainService = blockchainService;
         }
 
         // --- 1. DANH SÁCH SẢN PHẨM ---
@@ -38,7 +42,10 @@ namespace DACS.Controllers
                     anhSanPham = sp.AnhSanPham,
                     tenLoai = sp.LoaiSanPham != null ? sp.LoaiSanPham.TenLoai : "",
                     tenDVT = sp.DonViTinh != null ? sp.DonViTinh.TenLoaiTinh : "kg",
-                    moTa = sp.MoTa
+                    moTa = sp.MoTa,
+                    totalStock = _context.LoTonKhos
+                                .Where(lo => lo.M_SanPham == sp.M_SanPham) // (Tùy chọn) Chỉ lấy lô còn hạn
+                                .Sum(lo => lo.KhoiLuongConLai)
                 }).ToListAsync();
             return Ok(products);
         }
@@ -85,6 +92,42 @@ namespace DACS.Controllers
                 }).ToList()
             });
         }
+        [HttpPut("Update/{id}")]
+        public async Task<IActionResult> UpdateProduct(string id, [FromBody] ProductUpdateDto model)
+        {
+            if (id != model.Id) return BadRequest("ID không khớp");
+
+            // 1. TÌM VÀ CẬP NHẬT VÀO SQL SERVER
+            var productInSql = await _context.SanPhams.FindAsync(id);
+            if (productInSql == null) return NotFound("Không tìm thấy sản phẩm trong SQL");
+
+            // Chỉ cập nhật 3 trường như bạn yêu cầu
+            productInSql.TenSanPham = model.Title;
+            productInSql.Gia = model.Price;
+            productInSql.MoTa = model.Description;
+
+            try
+            {
+                // Lưu SQL trước
+                await _context.SaveChangesAsync();
+
+                // 2. CẬP NHẬT SANG FIRESTORE
+                // Gọi service đã tạo ở bước 1
+                await _firebaseSync.UpdateProductInFirestore(
+                    id,
+                    model.Title,
+                    model.Price,
+                    model.Description
+                );
+
+                return Ok(new { message = "Cập nhật thành công cả SQL và Firestore!" });
+            }
+            catch (Exception ex)
+            {
+                // Nếu lỗi xảy ra (ví dụ mất mạng không up được Firebase)
+                return StatusCode(500, new { message = "Lỗi cập nhật: " + ex.Message });
+            }
+        }
         [HttpPost("sync-products")]
         public async Task<IActionResult> SyncAllProductsToFirebase()
         {
@@ -106,21 +149,18 @@ namespace DACS.Controllers
                     // Xử lý ảnh: Nếu link ảnh là tương đối (/images/...), thêm domain vào
                     // Giả sử sp.AnhSanPham là chuỗi link ảnh chính
                     string imgUrl = sp.AnhSanPham;
-                    if (!string.IsNullOrEmpty(imgUrl) && !imgUrl.StartsWith("http"))
-                    {
-                        imgUrl = $"{Request.Scheme}://{Request.Host}{imgUrl}";
-                    }
+                    
 
                     // Map đúng tên trường mà Flutter App đang dùng (m_SanPham, tenSanPham...)
                     var productData = new Dictionary<string, object>
             {
-                { "m_SanPham", sp.M_SanPham },
-                { "tenSanPham", sp.TenSanPham },
-                { "gia", sp.Gia },
-                { "anhSanPham", imgUrl ?? "" }, // Link ảnh đầy đủ
-                { "tenLoai", sp.LoaiSanPham != null ? sp.LoaiSanPham.TenLoai : "" },
-                { "tenDVT", sp.DonViTinh != null ? sp.DonViTinh.TenLoaiTinh : "kg" },
-                { "moTa", sp.MoTa ?? "" },
+                { "id", sp.M_SanPham },
+                { "title", sp.TenSanPham },
+                { "price", sp.Gia },
+                { "imageUrls", imgUrl ?? "" }, // Link ảnh đầy đủ
+                { "category", sp.LoaiSanPham != null ? sp.LoaiSanPham.TenLoai : "" },
+                { "unit", sp.DonViTinh != null ? sp.DonViTinh.TenLoaiTinh : "kg" },
+                { "description", sp.MoTa ?? "" },
                 
                 // Thêm trường hỗ trợ tìm kiếm/lọc trên Firebase nếu cần
                 { "searchName", sp.TenSanPham.ToLower() }, // Để search không phân biệt hoa thường
@@ -140,6 +180,7 @@ namespace DACS.Controllers
                 return StatusCode(500, new { message = "Lỗi đồng bộ: " + ex.Message });
             }
         }
+        
         //mobi đang ký
         [HttpPost("sync-user")]
         public async Task<IActionResult> SyncUserFromMobile([FromBody] RegisterRequestDto req)
@@ -263,112 +304,125 @@ namespace DACS.Controllers
         public async Task<IActionResult> CreateThuGom([FromBody] ThuGomRequestDto req)
         {
             if (req == null) return BadRequest("Dữ liệu gửi lên bị rỗng");
+
+            // 1. Tìm Khách Hàng theo FirebaseID
             var khachHang = await _context.KhachHangs
-        .FirstOrDefaultAsync(k => k.FirebaseID == req.UserId); // Tìm theo FirebaseID
+                .FirstOrDefaultAsync(k => k.FirebaseID == req.UserId);
 
             if (khachHang == null)
             {
                 return BadRequest("Không tìm thấy thông tin khách hàng trong hệ thống SQL.");
             }
 
-            string mKhachHangCanDung = khachHang.M_KhachHang;
-            // Bắt đầu Transaction để đảm bảo lưu cả Yêu Cầu và Chi Tiết cùng lúc
+            // Bắt đầu Transaction SQL
             using var transaction = _context.Database.BeginTransaction();
             try
             {
-                // Bước 1: Tìm User trong DB để lấy ID nội bộ (Nếu cần)
-                // Giả sử req.UserId là ID lấy từ bảng AspNetUsers hoặc KhachHang
-
-                // Bước 2: Tạo Yêu Cầu Thu Gom (Master)
+                // 2. Tạo Yêu Cầu Thu Gom (Master)
                 var yeuCau = new YeuCauThuGom
                 {
-                    // 1. M_YeuCau: Tự sinh (GenerateRequestCode)
-                    M_YeuCau = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpper(),
-
-                    // 2. M_KhachHang: Lấy từ kết quả tìm kiếm ở trên
+                    M_YeuCau = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpper(), // Mã tự sinh
                     M_KhachHang = khachHang.M_KhachHang,
-
-                    // 3. NgayYeuCau: Lấy giờ hiện tại server
                     NgayYeuCau = DateTime.Now,
-
-                    // 4. ThoiGianSanSang: Lấy từ Mobile gửi lên (Nếu null thì mặc định là Now)
                     ThoiGianSanSang = req.ThoiGianSanSang ?? DateTime.Now,
-
-                    // 5. GhiChu: Map vào bảng Master này (Thay vì bảng ChiTiet)
                     GhiChu = req.GhiChu,
-
-                    // 6. TrangThai: Set cứng ban đầu
                     TrangThai = "Chờ xử lý",
-
-                    // 7. Địa chỉ: Map từ DTO
                     MaTinh = req.MaTinh,
                     MaQuan = req.MaQuan,
                     MaXa = req.MaXa,
-                    DiaChi_DuongApThon = req.DiaChiCuThe // Map vào trường này như bạn yêu cầu
+                    DiaChi_DuongApThon = req.DiaChiCuThe
                 };
                 _context.YeuCauThuGoms.Add(yeuCau);
                 await _context.SaveChangesAsync();
 
-                // Bước 3: Tạo Chi Tiết Thu Gom (Detail)
-                // Lưu ý: Bạn cần có logic tìm M_SanPham và M_LoaiSP dựa trên tên gửi lên
-                // Ở đây mình ví dụ gán cứng hoặc tìm đơn giản
-
+                // 3. Tìm sản phẩm / loại sản phẩm (Map dữ liệu)
                 var spDb = await _context.SanPhams.FirstOrDefaultAsync(p => p.TenSanPham == req.TenSanPham);
                 var lspDb = await _context.LoaiSanPhams.FirstOrDefaultAsync(l => l.TenLoai == req.LoaiSanPham);
 
-                // Nếu không tìm thấy, lấy sản phẩm mặc định (Bạn phải chắc chắn DB có mã này, ví dụ 'SP000')
-                // Hoặc trả về lỗi nếu bắt buộc phải có
-                string maSanPhamChuan = spDb != null ? spDb.M_SanPham : "SP001"; // <--- SỬA LẠI MÃ MẶC ĐỊNH CHO ĐÚNG DB CỦA BẠN
-                string maLoaiChuan = lspDb != null ? lspDb.M_LoaiSP : "LSP001"; // <--- SỬA LẠI MÃ MẶC ĐỊNH CHO ĐÚNG DB CỦA BẠN
+                string maSanPhamChuan = spDb != null ? spDb.M_SanPham : "SP001";
+                string maLoaiChuan = lspDb != null ? lspDb.M_LoaiSP : "LSP001";
 
+                // 4. Tạo Chi Tiết Thu Gom (Detail)
                 var chiTiet = new ChiTietThuGom
                 {
                     M_ChiTiet = Guid.NewGuid().ToString("N").Substring(0, 10),
                     M_YeuCau = yeuCau.M_YeuCau,
-
-                    // --- 1. SỬA LẠI ID SẢN PHẨM/LOẠI (Quan trọng nhất) ---
                     M_SanPham = maSanPhamChuan,
                     M_LoaiSP = maLoaiChuan,
-                    M_DonViTinh = req.DonViTinh, // Mặc định là KG từ mobile gửi lên
-
-                    // --- 2. SỐ LƯỢNG & GIÁ ---
+                    M_DonViTinh = req.DonViTinh,
                     SoLuong = (int)req.KhoiLuong,
                     GiaTriMongMuon = req.GiaMongMuon,
                     MoTa = req.GhiChu,
-
-                    // --- 3. CÁC HỆ SỐ & GIÁ (Bổ sung cho đủ giống hàm dưới) ---
                     DoAmThucTe = req.DoAm,
-                    HeSoMuaVu = 1.0,      // Mặc định 1.0
-                    HeSoDoAm = 1.0,       // Mặc định 1.0
-                    PhiVanChuyen = 0,     // Mặc định 0
-                    DonGiaThuMua = 0,     // Chưa chốt giá nên để 0
-
-                    // --- 4. TRẠNG THÁI & HÌNH ẢNH ---
+                    HeSoMuaVu = 1.0,
+                    HeSoDoAm = 1.0,
+                    PhiVanChuyen = 0,
+                    DonGiaThuMua = 0,
                     TrangThaiXuLy = "MoiYeuCau",
-                    MaLoTonKho = null, // Chưa nhập kho
                     DanhSachHinhAnh = req.HinhAnh != null && req.HinhAnh.Any() ? string.Join(";", req.HinhAnh) : null,
-
-                    // --- 5. ĐẶC TÍNH (Logic tự động suy luận từ Độ ẩm Mobile gửi lên) ---
-                    DacTinh_CongKenh = req.IsCongKenh, // Mobile mặc định gửi false
-                    DacTinh_TapChat = req.IsTapChat,   // Mobile mặc định gửi false
-
-                    // Logic tự tính toán giống hàm dưới nhưng dựa trên số liệu Mobile
-                    DacTinh_AmUot = (req.DoAm > 20),        // Ví dụ: Ẩm > 20% là ướt
-                    DacTinh_Kho = (req.DoAm <= 15),         // Ẩm <= 15% là khô
-                    DacTinh_DoAmCao = (req.DoAm > 15 && req.DoAm <= 20), // Hơi ẩm
-                    DacTinh_DaXuLy = false                  // Mặc định
+                    DacTinh_CongKenh = req.IsCongKenh,
+                    DacTinh_TapChat = req.IsTapChat,
+                    DacTinh_AmUot = (req.DoAm > 20),
+                    DacTinh_Kho = (req.DoAm <= 15),
+                    DacTinh_DoAmCao = (req.DoAm > 15 && req.DoAm <= 20),
+                    DacTinh_DaXuLy = false
                 };
 
                 _context.ChiTietThuGoms.Add(chiTiet);
                 await _context.SaveChangesAsync();
 
-                // Commit transaction
+                // 5. Commit SQL thành công
                 await transaction.CommitAsync();
 
+                // ---------------------------------------------------------
+                // 6. ĐỒNG BỘ SANG FIREBASE (ĐỂ ADMIN APP THẤY NGAY)
+                // ---------------------------------------------------------
+                try
+                {
+                    // Tạo Dictionary chứa dữ liệu cần hiển thị bên App Admin
+                    var firestoreData = new Dictionary<string, object>
+            {
+                // Key quan trọng để đồng bộ ngược lại
+                { "m_YeuCau", yeuCau.M_YeuCau },
+                { "isSync", true }, // Đánh dấu là dữ liệu chuẩn từ SQL
+
+                // Thông tin hiển thị
+                { "uid", khachHang.FirebaseID },
+                { "contactName", req.HoTen ?? khachHang.Ten_KhachHang },
+                { "contactPhone", req.SoDienThoai ?? khachHang.SDT_KhachHang },
+                { "fullAddress", $"{req.DiaChiCuThe}, {req.MaXa}, {req.MaQuan}, {req.MaTinh}" }, // Tạm gộp địa chỉ
+                
+                // Thông tin sản phẩm
+                { "productName", req.TenSanPham ?? "Sản phẩm chưa xác định" },
+                { "productId", maSanPhamChuan },
+                { "category", req.LoaiSanPham ?? "Loại chưa xác định" },
+                
+                // Số liệu
+                { "amount", req.KhoiLuong },
+                { "giaTriMongMuon", req.GiaMongMuon },
+                { "doAm", req.DoAm },
+                { "note", req.GhiChu },
+                
+                // Trạng thái & Thời gian
+                { "trangThaiXuLy", "MoiYeuCau" },
+                { "createdAt", Timestamp.GetCurrentTimestamp() }
+            };
+
+                    // Gọi Service đẩy lên Firestore
+                    // Lưu ý: _firebaseService cần được Inject vào Controller này
+                    await _firebaseSync.AddThuGomToFirestoreAsync(firestoreData, yeuCau.M_YeuCau);
+                }
+                catch (Exception firestoreEx)
+                {
+                    // Chỉ log lỗi, không làm hỏng flow chính vì đơn hàng đã tạo thành công ở SQL
+                    Console.WriteLine($"[Lỗi Firestore]: {firestoreEx.Message}");
+                }
+
+                // 7. Trả về kết quả cho Mobile App
                 return Ok(new
                 {
                     message = "Tạo yêu cầu thành công!",
-                    maYeuCau = yeuCau.M_YeuCau
+                    maYeuCau = yeuCau.M_YeuCau // Trả mã này về để Mobile App có thể lưu cục bộ nếu cần
                 });
             }
             catch (Exception ex)
@@ -556,6 +610,218 @@ namespace DACS.Controllers
                 // Nếu lỗi do Khóa ngoại, InnerException sẽ nói rõ là bảng nào
                 var errorMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
                 return StatusCode(500, new { message = "Lỗi Server: " + errorMsg });
+            }
+        }
+        [HttpPost("update-order-status")]
+        public async Task<IActionResult> UpdateOrderStatus([FromBody] OrderStatusDto req)
+        {
+            if (req == null || string.IsNullOrEmpty(req.MaDonHang))
+                return BadRequest("Dữ liệu không hợp lệ.");
+
+            // 1. Tìm đơn hàng (Include Chi tiết để trừ kho)
+            var orderSql = await _context.DonHangs
+                .Include(d => d.ChiTietDatHangs)
+                .FirstOrDefaultAsync(o => o.M_DonHang == req.MaDonHang);
+
+            if (orderSql == null)
+                return NotFound(new { message = "Không tìm thấy đơn hàng trong SQL." });
+
+            if (orderSql.TrangThai == "Hoàn thành" && req.TrangThai == "Đã hủy")
+                return BadRequest(new { message = "Đơn hàng đã hoàn thành, không thể hủy." });
+
+            using var transaction = _context.Database.BeginTransaction();
+            try
+            {
+                // 2. Cập nhật thông tin cơ bản
+                orderSql.TrangThai = req.TrangThai;
+
+                if (!string.IsNullOrEmpty(req.DonViVanChuyen) && !string.IsNullOrEmpty(orderSql.M_VanDon))
+                {
+                    var vanChuyen = await _context.VanChuyens.FirstOrDefaultAsync(vc => vc.M_VanDon == orderSql.M_VanDon);
+                    if (vanChuyen != null) vanChuyen.DonViVanChuyen = req.DonViVanChuyen;
+                }
+
+                // =========================================================================
+                // 3. LOGIC TRỪ TỒN KHO & GHI BLOCKCHAIN (CHỈ CHẠY KHI HOÀN THÀNH)
+                // =========================================================================
+                if (req.TrangThai == "Hoàn thành")
+                {
+                    // A. TRỪ TỒN KHO (Chỉ trừ nếu chưa trừ)
+                    if (orderSql.DaTruTonKho == false)
+                    {
+                        foreach (var item in orderSql.ChiTietDatHangs)
+                        {
+                            decimal soLuongCanTru = (decimal)item.Khoiluong;
+                            var cacLoHang = await _context.LoTonKhos
+                                .Where(l => l.M_SanPham == item.M_SanPham && l.KhoiLuongConLai > 0)
+                                .OrderBy(l => l.HanSuDung)
+                                .ToListAsync();
+
+                            if (!cacLoHang.Any()) throw new Exception($"Sản phẩm {item.M_SanPham} hết hàng.");
+
+                            foreach (var lo in cacLoHang)
+                            {
+                                if (soLuongCanTru <= 0) break;
+                                if (lo.KhoiLuongConLai >= soLuongCanTru)
+                                {
+                                    lo.KhoiLuongConLai -= (int)soLuongCanTru;
+                                    soLuongCanTru = 0;
+                                }
+                                else
+                                {
+                                    soLuongCanTru -= lo.KhoiLuongConLai;
+                                    lo.KhoiLuongConLai = 0;
+                                }
+                            }
+                            if (soLuongCanTru > 0) throw new Exception($"Kho thiếu hàng cho sản phẩm {item.M_SanPham}.");
+                        }
+                        orderSql.DaTruTonKho = true;
+                    }
+
+                    // B. GHI NHẬT KÝ VÀO GANACHE (BLOCKCHAIN)
+                    try
+                    {
+                        // Chuẩn bị dữ liệu Metadata
+                        string metadata = $"Đơn hàng {orderSql.M_DonHang} - {orderSql.TrangThai} - " +
+                                          $"{orderSql.M_PhuongThuc} - Tổng tiền: {orderSql.TotalPrice:N0}";
+
+                        // Lấy khối lượng thực tế từ App gửi lên, nếu null thì lấy 0
+                        string weightData = req.KhoiLuongThucTe.HasValue
+                                            ? req.KhoiLuongThucTe.Value.ToString()
+                                            : "0";
+
+                        // Gọi Service Blockchain
+                        // Tham số 3: Thay ShippingAddress bằng WeightData như bạn yêu cầu
+                        await _blockchainService.GhiNhatKyAsync(
+                            orderSql.M_DonHang,      // ID
+                            orderSql.TrangThai,      // Trạng thái
+                            weightData,              // Thay cho Shipping Address
+                            metadata                 // Metadata mô tả
+                        );
+                    }
+                    catch (Exception bcEx)
+                    {
+                        // Chỉ log lỗi blockchain, không rollback giao dịch chính (vì đơn hàng đã xong rồi)
+                        // Hoặc nếu bạn muốn Blockchain bắt buộc phải thành công thì bỏ try-catch này đi
+                        Console.WriteLine($"[Blockchain Error]: {bcEx.Message}");
+                    }
+                }
+
+                // 4. Lưu Database
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { message = "Cập nhật thành công! (Đã trừ kho & lưu Blockchain)" });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = "Lỗi Server: " + ex.Message });
+            }
+        }
+        [HttpGet("inventory")]
+        public async Task<IActionResult> GetInventory()
+        {
+            try
+            {
+                // Join bảng Lô Tồn Kho với Sản Phẩm và Kho Hàng
+                var inventory = await _context.LoTonKhos
+                    .Include(lo => lo.SanPham)
+                        .ThenInclude(sp => sp.DonViTinh) // Để lấy đơn vị (kg, lít...)
+                    .Include(lo => lo.KhoHang)
+                    .Where(lo => lo.KhoiLuongConLai > 0) // Chỉ lấy lô còn hàng
+                    .Select(lo => new
+                    {
+                        // Thông tin hiển thị
+                        ProductName = lo.SanPham.TenSanPham,
+                        ProductImage = lo.SanPham.AnhSanPham,
+                        Quantity = lo.KhoiLuongConLai,
+                        Unit = lo.SanPham.DonViTinh != null ? lo.SanPham.DonViTinh.TenLoaiTinh : "kg",
+                        WarehouseName = lo.KhoHang.TenKho,
+
+                        // Thông tin phụ (nếu cần)
+                        ExpiryDate = lo.HanSuDung
+                    })
+                    .OrderBy(x => x.WarehouseName) // Sắp xếp theo tên kho cho dễ nhìn
+                    .ToListAsync();
+
+                return Ok(inventory);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi Server: " + ex.Message });
+            }
+        }
+        [HttpPost("update-scrap-status")]
+        public async Task<IActionResult> UpdateScrapStatus([FromBody] ScrapStatusDto req)
+        {
+            if (req == null || string.IsNullOrEmpty(req.RequestId)) return BadRequest("Dữ liệu không hợp lệ");
+
+            // A. Tìm Yêu Cầu Thu Gom (Kèm theo Chi Tiết để lấy ProductId)
+            var request = await _context.YeuCauThuGoms
+                .Include(y => y.ChiTietThuGoms) // <--- QUAN TRỌNG: Load chi tiết để lấy M_SanPham
+                .FirstOrDefaultAsync(y => y.M_YeuCau == req.RequestId);
+
+            if (request == null) return NotFound(new { message = "Không tìm thấy yêu cầu trong SQL" });
+
+            // Validate: Nếu đã xong thì thôi
+            if (request.TrangThai == "HoanThanh" && req.Status != "HoanThanh")
+            {
+                return BadRequest(new { message = "Đơn này đã hoàn thành, không thể sửa." });
+            }
+
+            using var transaction = _context.Database.BeginTransaction();
+            try
+            {
+                // B. Cập nhật trạng thái Master (YeuCauThuGom)
+                request.TrangThai = req.Status;
+
+                if (!string.IsNullOrEmpty(req.Date) && DateTime.TryParse(req.Date, out DateTime parsedDate))
+                {
+                     request.ThoiGianHoanThanh = parsedDate; // Nếu muốn lưu ngày hoàn thành
+                }
+
+                // C. LOGIC CỘNG TỒN KHO (Dựa vào Chi Tiết)
+                if (req.Status == "HoanThanh")
+                {
+                    // Duyệt qua danh sách chi tiết (thường chỉ có 1 sản phẩm, nhưng code loop cho chắc)
+                    foreach (var detail in request.ChiTietThuGoms)
+                    {
+                        // Xác định khối lượng cần cộng:
+                        // Nếu User nhập khối lượng thực tế -> Dùng nó.
+                        // Nếu không -> Dùng khối lượng dự kiến trong chi tiết.
+                        int weightToAdd = req.ActualWeight ?? (int)detail.SoLuong;
+
+                        // Cập nhật lại số lượng chốt trong ChiTietThuGom luôn
+                        detail.SoLuong = (int)weightToAdd;
+
+                        // 1. Tìm Lô Tồn Kho dựa trên M_SanPham của chi tiết này
+                        var existingBatch = await _context.LoTonKhos
+                            .FirstOrDefaultAsync(l => l.M_SanPham == detail.M_SanPham);
+
+                        if (existingBatch != null)
+                        {
+                            // 2. Cộng vào kho
+                            existingBatch.KhoiLuongConLai += weightToAdd;
+                        }
+                        else
+                        {
+                            // Nếu chưa có lô nào, bắt buộc phải có logic tạo mới hoặc báo lỗi
+                            // Ở đây tôi chọn báo lỗi để Admin biết mà tạo kho trước
+                            throw new Exception($"Sản phẩm {detail.M_SanPham} chưa có lô hàng nào trong kho.");
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { message = "Cập nhật & Nhập kho thành công!" });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = "Lỗi Server: " + ex.Message });
             }
         }
     }

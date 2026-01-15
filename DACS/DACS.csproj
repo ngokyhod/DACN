@@ -7,10 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Amazon.JSII.Runtime" Version="1.124.0" />
     <PackageReference Include="EPPlus" Version="5.8.0" />
     <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="Google.Cloud.Firestore" Version="4.1.0" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="4.13.0" />
     <PackageReference Include="MailKit" Version="4.12.1" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="8.0.11" />

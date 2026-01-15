@@ -57,6 +57,8 @@ builder.Services.ConfigureApplicationCookie(options => {
     options.LogoutPath = $"/Identity/Account/Logout";
     options.LogoutPath = $"/Identity/Account/AccessDenied";
 });
+
+
 string path = Path.Combine(Directory.GetCurrentDirectory(), "firebase_config.json");
 Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
 

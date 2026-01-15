@@ -1,9 +1,33 @@
 ﻿using FirebaseAdmin.Auth;
-using Google.Cloud.Firestore; // Cần cài thêm gói Google.Cloud.Firestore nếu dùng Firestore
+using Google.Cloud.Firestore;
+using Google.Cloud.Storage.V1; // Cần cài thêm gói Google.Cloud.Firestore nếu dùng Firestore
 
 public class FirebaseSyncService
 {
     private readonly FirestoreDb _firestoreDb;
+    private readonly string _projectId;
+    private readonly string _bucketName; // Tên kho chứa ảnh
+    private readonly IWebHostEnvironment _env; // Môi trường web
+    public FirebaseSyncService(IConfiguration configuration, IWebHostEnvironment env)
+    {
+        _env = env;
+        _projectId = configuration["Firebase:ProjectId"] ?? "ppnongnghiep";
+        // Tên bucket: thường là project-id.appspot.com
+        _bucketName = configuration["Firebase:StorageBucket"] ?? $"{_projectId}.appspot.com";
+
+        try
+        {
+            // Biến môi trường GOOGLE_APPLICATION_CREDENTIALS phải được set trước đó
+            // hoặc server đã được cấp quyền.
+            _firestoreDb = FirestoreDb.Create(_projectId);
+            Console.WriteLine($"[FirebaseSyncService] Kết nối Firestore thành công tới: {_projectId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lỗi khởi tạo Firestore]: {ex.Message}");
+            // _firestoreDb sẽ là null nếu khởi tạo thất bại
+        }
+    }
     public async Task<string> CreateFirebaseUserAsync(string email, string password, string displayName, string phoneNumber)
     {
         try
@@ -63,66 +87,129 @@ public class FirebaseSyncService
             Console.WriteLine($"[Firestore LỖI]: {ex.Message}");
         }
     }
-    public async Task SyncProductsToFirestoreAsync(List<Dictionary<string, object>> productList)
+    public async Task UpdateProductInFirestore(string id, string title, long price, string description)
     {
-        if (_firestoreDb == null) return;
+        // Giả sử collection của bạn tên là "products"
+        DocumentReference docRef = _firestoreDb.Collection("SanPham").Document(id);
+
+        Dictionary<string, object> updates = new Dictionary<string, object>
+    {
+        { "title", title },
+        { "price", price },
+        { "description", description },
+        { "lastUpdated", Timestamp.GetCurrentTimestamp() }
+    };
+
+        // UpdateAsync chỉ cập nhật các trường được chỉ định, không ghi đè toàn bộ document
+        await docRef.UpdateAsync(updates);
+    }
+    public async Task<string> UploadImageToStorageAsync(string localRelativePath)
+    {
         try
         {
-            CollectionReference productsCol = _firestoreDb.Collection("Products");
+            if (string.IsNullOrEmpty(localRelativePath)) return "";
 
-            // BatchWrite để ghi nhanh hơn
-            WriteBatch batch = _firestoreDb.StartBatch();
-            int count = 0;
+            // Xóa dấu / đầu dòng để tìm file
+            string cleanPath = localRelativePath.TrimStart('/', '\\');
+            // Đường dẫn tuyệt đối trên ổ cứng máy tính
+            string physicalPath = Path.Combine(_env.WebRootPath, cleanPath);
 
-            foreach (var product in productList)
+            if (!File.Exists(physicalPath)) return ""; // Không có file thì bỏ qua
+
+            // Upload
+            var storage = await StorageClient.CreateAsync();
+            using (var fileStream = File.OpenRead(physicalPath))
             {
-                string productId = product["m_SanPham"].ToString();
-                DocumentReference docRef = productsCol.Document(productId);
-
-                // Thêm vào hàng đợi batch
-                batch.Set(docRef, product, SetOptions.MergeAll);
-                count++;
-
-                // Firestore giới hạn 500 writes/batch, nếu nhiều quá thì commit dần
-                if (count >= 400)
-                {
-                    await batch.CommitAsync();
-                    batch = _firestoreDb.StartBatch();
-                    count = 0;
-                }
+                await storage.UploadObjectAsync(_bucketName, cleanPath, null, fileStream);
             }
 
-            // Commit số còn lại
-            if (count > 0) await batch.CommitAsync();
-
-            Console.WriteLine($"[Firestore] Đã đồng bộ xong {productList.Count} sản phẩm.");
+            // Tạo link Public
+            string objectNameEncoded = Uri.EscapeDataString(cleanPath);
+            return $"https://firebasestorage.googleapis.com/v0/b/{_bucketName}/o/{objectNameEncoded}?alt=media";
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[Firestore Lỗi Product]: {ex.Message}");
+            return ""; // Lỗi thì trả về rỗng
         }
     }
+   public async Task SyncProductsToFirestoreAsync(List<Dictionary<string, object>> productList)
+        {
+            if (_firestoreDb == null) return;
+            try
+            {
+                CollectionReference productsCol = _firestoreDb.Collection("SanPham");
+                WriteBatch batch = _firestoreDb.StartBatch();
+                int count = 0;
 
-    public async Task AddThuGomToFirestoreAsync(Dictionary<string, object> data)
+                foreach (var product in productList)
+                {
+                    if (!product.ContainsKey("id")) continue;
+                    
+                    string productId = product["id"].ToString();
+
+                    // === LOGIC MỚI: TỰ ĐỘNG UPLOAD ẢNH ===
+                    if (product.ContainsKey("imageUrls"))
+                    {
+                        string currentImg = product["imageUrls"]?.ToString();
+                        // Nếu là ảnh local (không chứa http), thì upload
+                        if (!string.IsNullOrEmpty(currentImg) && !currentImg.StartsWith("http"))
+                        {
+                            Console.WriteLine($"[Storage] Đang upload ảnh: {currentImg}...");
+                            string cloudUrl = await UploadImageToStorageAsync(currentImg);
+                            
+                            if (!string.IsNullOrEmpty(cloudUrl))
+                            {
+                                product["imageUrls"] = cloudUrl; // Thay thế bằng link online
+                            }
+                        }
+                    }
+                    // ======================================
+
+                    DocumentReference docRef = productsCol.Document(productId);
+                    batch.Set(docRef, product, SetOptions.MergeAll);
+                    count++;
+
+                    if (count >= 400)
+                    {
+                        await batch.CommitAsync();
+                        batch = _firestoreDb.StartBatch();
+                        count = 0;
+                    }
+                }
+
+                if (count > 0) await batch.CommitAsync();
+                Console.WriteLine($"[Success] Đã đồng bộ {productList.Count} sản phẩm kèm ảnh Cloud.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error]: {ex.Message}");
+                throw;
+            }
+        }
+
+    public async Task AddThuGomToFirestoreAsync(Dictionary<string, object> data, string sqlRequestId)
     {
         try
         {
-            // 1. Kết nối Firestore
-            FirestoreDb db = FirestoreDb.Create("ppnongnghiep"); // Đảm bảo ProjectID đúng
+            FirestoreDb db = FirestoreDb.Create("ppnongnghiep");
 
-            // 2. Tham chiếu Collection "ThuGom"
-            CollectionReference colRef = db.Collection("ThuGom");
+            // Thay vì AddAsync (tự sinh ID), ta dùng Doc(ID).SetAsync
+            DocumentReference docRef = db.Collection("ThuGom").Document(sqlRequestId);
 
-            // 3. Thêm document mới (Để Firestore tự sinh ID document)
-            await colRef.AddAsync(data);
+            // Thêm trường m_YeuCau vào data để chắc chắn Firestore cũng có mã này
+            if (!data.ContainsKey("m_YeuCau"))
+            {
+                data.Add("m_YeuCau", sqlRequestId);
+            }
 
-            Console.WriteLine("[Firestore] Đã đẩy yêu cầu thu gom lên thành công.");
+            await docRef.SetAsync(data);
+
+            Console.WriteLine($"[Firestore] Đã đồng bộ yêu cầu {sqlRequestId} thành công.");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Firestore LỖI]: {ex.Message}");
-            // Ném lỗi để bên Controller bắt được và log lại
-            throw;
+            // Không throw lỗi ở đây để tránh rollback SQL nếu Firestore lỗi (chấp nhận lệch tạm thời)
         }
     }
     public async Task AddDonHangToFirestoreAsync(Dictionary<string, object> data)
@@ -146,4 +233,5 @@ public class FirebaseSyncService
             // Chỉ log lỗi, không ném exception để tránh làm crash luồng chính của Web
         }
     }
+    
 }
