@@ -17,7 +17,77 @@
     <link rel="stylesheet" href="~/Đồ_án_cs.styles.css" asp-append-version="true" />
     <style>
         /* Sửa lỗi dropdown bị cắt / bị che */
+        @@keyframes rotateBorder {
+            from
 
+        {
+            transform: translate(-50%, -50%) rotate(0deg);
+        }
+
+        to {
+            transform: translate(-50%, -50%) rotate(360deg);
+        }
+
+        }
+
+        /* 2. Cấu hình cho nút AI */
+        .ai-highlight {
+            position: relative;
+            z-index: 0;
+            overflow: hidden; /* Cắt phần màu thừa đi */
+            color: #fff !important; /* Chữ màu trắng */
+            font-weight: bold;
+            border-radius: 0.25rem;
+            /* Canh chỉnh text */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent; /* Bắt buộc nền trong suốt */
+            padding: 4px 15px 30px; /* Giảm từ 8px xuống 4px (trên/dưới) */
+            font-size: 21px; /* Giảm cỡ chữ xuống xíu cho gọn */
+            min-width: auto; /* Bỏ min-width lớn để nút tự co theo chữ */
+            height: 50px; /* (Tùy chọn) Cố định chiều cao nếu muốn */
+            white-space: nowrap;
+        }
+
+            /* 3. Lớp màu chạy (Nằm dưới cùng) */
+            .ai-highlight::before {
+                content: '';
+                position: absolute;
+                z-index: -2;
+                left: 50%;
+                top: 50%;
+                width: 200%; /* Kích thước lớn hơn nút để khi xoay vẫn phủ kín */
+                height: 200%;
+                /* Dải màu Neon: Bạn có thể đổi màu ở đây */
+                background-repeat: no-repeat;
+                background-size: 50% 50%, 50% 50%;
+                background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+                background-image: linear-gradient(#399953, #399953), linear-gradient(#fbb300, #fbb300), linear-gradient(#d53e33, #d53e33), linear-gradient(#377af5, #377af5);
+                /* Hoặc dùng Conic Gradient cho mượt hơn: */
+                background: conic-gradient( transparent, #00d2ff, #3a7bd5, #00d2ff, transparent );
+                animation: rotateBorder 3s linear infinite; /* Tốc độ chạy */
+            }
+
+            /* 4. Lớp nền che ở giữa (Giả lập viền) */
+            .ai-highlight::after {
+                content: '';
+                position: absolute;
+                z-index: -1;
+                /* inset: Độ dày của viền. Số càng nhỏ viền càng mỏng */
+                left: 2px;
+                top: 2px;
+                right: 2px;
+                bottom: 2px;
+                background: #343a40; /* ⚠️ QUAN TRỌNG: Màu này phải trùng với màu nền Sidebar của bạn */
+                border-radius: 0.20rem;
+            }
+
+            /* Hiệu ứng khi di chuột vào (Tăng sáng) */
+            .ai-highlight:hover {
+                box-shadow: 0 0 15px #00d2ff;
+                text-shadow: 0 0 5px white;
+            }
         /* 1. Cho phép navbar-mid hiển thị nội dung "tràn" ra ngoài (sửa lỗi "chỉ bật 1 nữa") */
         #header-nav.navbar-mid {
             overflow: visible;
@@ -84,9 +154,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-2"></div>
-                    <div class="col-lg-5 col-md-6 col-sm-5 language-currency-header">
+                   
+                    <div class="col-lg-5 col-md-4 col-sm-5 language-currency-header">
                         <partial name="_LoginPartial" />
+                    </div>
+                    <div class="col-md-2">
+                        <a class="nav-link ai-highlight" href="/home/ExpertAi">
+                            <i class="bi bi-stars"></i> Chuyên gia tư vấn
+                        </a>
                     </div>
                 </div>
             </div>
@@ -250,6 +325,7 @@
                                                 <li><a asp-controller="DS_SP" asp-action="NangLuongSinhKhoi" class="text-decoration-none text-dark">Năng lượng sinh khối</a></li>
                                             </ul>
                                         </div>
+
                                     </div>
                                 </section>
                             </div>
@@ -262,6 +338,9 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/home/contact">Liên Hệ</a>
+                        </li>
+                        <li class="nav-item ms-auto">
+                           
                         </li>
                     </ul>
                 </div>
