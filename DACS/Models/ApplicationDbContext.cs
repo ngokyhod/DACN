@@ -76,7 +76,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SanPhamYeuThich> SanPhamYeuThichs { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<BlockchainTransaction> BlockchainTransaction { get; set; }
-
+    public DbSet<AIMessages> AIMessages { get; set; }
     protected override void OnModelCreating(ModelBuilder builder)
 
     {

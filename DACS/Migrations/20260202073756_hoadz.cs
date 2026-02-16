@@ -12,6 +12,23 @@ namespace DACS.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "AIMessages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SessionId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsAi = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AIMessages", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AspNetRoles",
                 columns: table => new
                 {
@@ -1283,6 +1300,9 @@ namespace DACS.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_ChiTietLienHe_KhachHangs_M_KhachHang",
                 table: "ChiTietLienHe");
+
+            migrationBuilder.DropTable(
+                name: "AIMessages");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
