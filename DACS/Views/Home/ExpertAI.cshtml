@@ -25,6 +25,7 @@
         padding: 0;
         flex-direction: row;
     }
+
     [data-theme="dark"] {
         --bg-color: #343541;
         --sidebar-bg: #202123;
@@ -180,6 +181,34 @@
         gap: 10px;
         align-items: center;
     }
+
+    /* === CSS MỚI CHO NÚT GỢI Ý CÂU HỎI === */
+    .ai-suggestion-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .ai-suggestion-btn {
+        background-color: transparent;
+        border: 1px solid var(--input-border);
+        color: var(--text-color);
+        border-radius: 20px;
+        padding: 8px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+        .ai-suggestion-btn:hover {
+            background-color: #10a37f;
+            border-color: #10a37f;
+            color: white;
+        }
 </style>
 
 <div class="container-fluid p-0 chat-container d-flex">
@@ -210,7 +239,7 @@
         <div id="chatBox" class="flex-grow-1 p-4 overflow-auto">
             <div class="message-row ai">
                 <div class="ai-avatar">AI</div>
-                <div class="message-content">Xin chào! Tôi đã sẵn sàng.</div>
+                <div class="message-content">Xin chào! Tôi có thể giúp gì cho bạn về thông tin nông sản và kho hàng hôm nay?</div>
             </div>
         </div>
 
@@ -244,35 +273,62 @@
             const res = await fetch('/History/GetSessions');
             const sessions = await res.json();
             const listHtml = document.getElementById("historyList");
-            listHtml.innerHTML = ""; // Xóa chữ "Đang tải..."
+            listHtml.innerHTML = "";
 
             if (sessions.length === 0) {
                 listHtml.innerHTML = `<div class="text-center text-muted mt-2" style="font-size:12px">Chưa có lịch sử</div>`;
                 return;
             }
 
-            // Vòng lặp này chính là "foreach" của bạn
             sessions.forEach(s => {
                 const item = document.createElement("div");
                 item.className = `history-item ${s.sessionId === currentSessionId ? 'active' : ''}`;
 
-                // Hiển thị nội dung tóm tắt (Preview) cho đẹp
                 let title = s.preview || "Cuộc hội thoại mới";
                 if (title.length > 35) title = title.substring(0, 35) + "...";
 
                 item.innerHTML = `<i class="bi bi-chat-text me-2"></i> ${title}`;
 
-                // Bắt sự kiện click
                 item.onclick = () => {
                     window.history.pushState({}, "", "?session=" + s.sessionId);
-                    location.reload(); // Tải lại để cập nhật view
+                    location.reload();
                 };
                 listHtml.appendChild(item);
             });
         } catch(e) { console.error("Lỗi tải lịch sử:", e); }
     }
 
-    // --- HÀM 2: TẢI NỘI DUNG CUỘC TRÒ CHUYỆN ---
+    // --- XỬ LÝ FORMAT TIN NHẮN (Bao gồm Nút Gợi Ý) ---
+    function formatAIMessage(rawText, showButtons = false) {
+        let suggestions = [];
+
+        // Cắt bỏ chuỗi [SUGGESTION] và lấy nội dung phía sau nó
+        let mainText = rawText.replace(/\[SUGGESTION\](.*)/g, function(match, suggestionText) {
+            if (suggestionText.trim()) {
+                suggestions.push(suggestionText.trim());
+            }
+            return ""; // Xóa dòng [SUGGESTION] khỏi màn hình chính
+        });
+
+        // Dùng marked để render Markdown các phần còn lại
+        let htmlContent = marked.parse(mainText.trim());
+
+        // Nếu cho phép hiển thị button (tin nhắn cuối cùng) và có gợi ý
+        if (showButtons && suggestions.length > 0) {
+            let buttonsHtml = '<div class="ai-suggestion-container">';
+            suggestions.forEach(s => {
+                // Escape dấu nháy đơn để tránh lỗi click Javascript
+                let safeText = s.replace(/'/g, "\\'");
+                buttonsHtml += `<button class="ai-suggestion-btn" onclick="sendSuggestion('${safeText}')"><i class="bi bi-search"></i> ${s}</button>`;
+            });
+            buttonsHtml += '</div>';
+            htmlContent += buttonsHtml;
+        }
+
+        return htmlContent;
+    }
+
+    // --- TẢI NỘI DUNG CUỘC TRÒ CHUYỆN CŨ ---
     async function loadConversation(sessionId) {
         try {
             const res = await fetch('/History/GetConversation?sessionId=' + sessionId);
@@ -283,22 +339,39 @@
             messages.forEach(m => {
                 const role = m.isAi ? "ai" : "user";
                 const avatar = m.isAi ? `<div class="ai-avatar">AI</div>` : "";
-                const content = m.isAi ? marked.parse(m.content) : m.content;
+
+                // Khi tải lịch sử cũ, KHÔNG hiển thị lại nút bấm (truyền tham số false)
+                const content = m.isAi ? formatAIMessage(m.content, false) : m.content;
                 chatBox.innerHTML += `<div class="message-row ${role}">${avatar}<div class="message-content">${content}</div></div>`;
             });
             chatBox.scrollTop = chatBox.scrollHeight;
         } catch(e) { console.error(e); }
     }
 
-    // --- HÀM 3: GỬI TIN NHẮN ---
-    document.getElementById("chatForm").addEventListener("submit", async function(e) {
+    // Bắt sự kiện Gợi ý
+    function sendSuggestion(text) {
+        document.getElementById("userInp").value = text;
+        sendMessageAction(text);
+    }
+
+    // Bắt sự kiện Submit form
+    document.getElementById("chatForm").addEventListener("submit", function(e) {
         e.preventDefault();
+        const input = document.getElementById("userInp");
+        const msg = input.value.trim();
+        if (msg) sendMessageAction(msg);
+    });
+
+    // --- LUỒNG XỬ LÝ GỬI TIN NHẮN CHÍNH ---
+    async function sendMessageAction(msg) {
         const input = document.getElementById("userInp");
         const chatBox = document.getElementById("chatBox");
         const loader = document.getElementById("loadingStatus");
-        const msg = input.value.trim();
-        if (!msg) return;
 
+        // 1. Xóa các nút gợi ý của câu trước đó (nếu có)
+        document.querySelectorAll('.ai-suggestion-container').forEach(el => el.remove());
+
+        // 2. Hiển thị tin nhắn User
         chatBox.innerHTML += `<div class="message-row user"><div class="message-content">${msg}</div></div>`;
         input.value = "";
         loader.style.display = "block";
@@ -333,12 +406,21 @@
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
                 const chunk = decoder.decode(value, { stream: true });
                 fullAiResponse += chunk;
-                contentDiv.innerHTML = marked.parse(fullAiResponse);
+
+                // Trong lúc đang stream, không render button ngay (truyền false)
+                // Nó sẽ tự ẩn các thẻ [SUGGESTION] đi nếu có
+                contentDiv.innerHTML = formatAIMessage(fullAiResponse, false);
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
-            // Lưu AI Msg
+
+            // KHI STREAM XONG HOÀN TOÀN -> MỚI RENDER BUTTON (Truyền true)
+            contentDiv.innerHTML = formatAIMessage(fullAiResponse, true);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Lưu AI Msg (Lưu chuỗi gốc chứa [SUGGESTION] để lần sau load lên dễ ẩn)
             await fetch('/History/SaveMessage', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ SessionId: currentSessionId, Content: fullAiResponse, IsAi: true })
@@ -349,7 +431,7 @@
 
         } catch (err) { if (err.name !== 'AbortError') alert("Lỗi: " + err); }
         finally { loader.style.display = "none"; toggleButtons(false); abortController = null; }
-    });
+    }
 
     function resetChat() { window.location.href = window.location.pathname; }
     function stopGeneration() { if(abortController) abortController.abort(); }
