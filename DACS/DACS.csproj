@@ -41,7 +41,7 @@
 
   <ItemGroup>
     <Folder Include="PTTT\" />
-    <Folder Include="Services\AI_Engine\KnowledgeBase\" />
+    <Folder Include="Services\AI_Engine\KnowledgeBase\ReferenceImages\" />
   </ItemGroup>
 
 </Project>

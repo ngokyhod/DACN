@@ -51,7 +51,6 @@
         border-right: 1px solid #e5e5e5;
     }
 
-    /* Style cho mục lịch sử */
     .history-item {
         cursor: pointer;
         padding: 10px;
@@ -81,7 +80,6 @@
         border-color: #565869;
     }
 
-    /* Các style khác giữ nguyên */
     #chatBox {
         scroll-behavior: smooth;
     }
@@ -128,7 +126,7 @@
 
     .input-area {
         background: var(--bg-color);
-        padding: 24px;
+        padding: 15px 24px 24px 24px;
         border-top: 1px solid #e5e5e5;
     }
 
@@ -138,7 +136,8 @@
         border: 1px solid var(--input-border);
         border-radius: 12px;
         padding: 14px;
-        padding-right: 100px;
+        padding-left: 55px; /* Chừa chỗ cho icon ảnh */
+        padding-right: 55px; /* Chừa chỗ cho icon gửi */
     }
 
     .btn-action {
@@ -155,6 +154,16 @@
         right: 15px;
         color: #8e8ea0;
     }
+
+    .btn-image {
+        left: 10px;
+        color: #8e8ea0;
+        transition: color 0.2s;
+    }
+
+        .btn-image:hover {
+            color: #10a37f;
+        }
 
     .btn-stop {
         right: 15px;
@@ -182,7 +191,6 @@
         align-items: center;
     }
 
-    /* === CSS MỚI CHO NÚT GỢI Ý CÂU HỎI === */
     .ai-suggestion-container {
         display: flex;
         flex-wrap: wrap;
@@ -209,6 +217,68 @@
             border-color: #10a37f;
             color: white;
         }
+
+    /* CSS cho vùng hiển thị ảnh xem trước */
+    #imgPreviewContainer {
+        position: relative;
+        display: inline-block;
+        margin-bottom: 10px;
+    }
+
+    #imgPreview {
+        max-height: 80px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .btn-remove-img {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #ef4444;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    /* ========================================================= */
+    /* CSS CHO TRẠNG THÁI CỦA AGENT (TỰ ĐỘNG BIẾN MẤT SAU 5 GIÂY) */
+    /* ========================================================= */
+    .ai-status {
+        color: #8e8ea0;
+        font-size: 0.9em;
+        font-style: italic;
+        margin-bottom: 6px;
+        animation: fadeOutStatus 1s ease-in-out forwards;
+        animation-delay: 5s; /* Thời gian chờ trước khi biến mất (5 giây) */
+        overflow: hidden;
+    }
+
+    @@keyframes fadeOutStatus {
+        0%
+
+    {
+        opacity: 1;
+        max-height: 50px;
+    }
+
+    100% {
+        opacity: 0;
+        max-height: 0;
+        margin-bottom: 0;
+        padding: 0;
+        border: none;
+    }
+
+    }
 </style>
 
 <div class="container-fluid p-0 chat-container d-flex">
@@ -218,7 +288,7 @@
         </button>
 
         <div class="p-3 rounded mb-3" style="background: rgba(128,128,128,0.1);">
-            <small><i class="bi bi-cpu"></i> <strong>Llama 3 (Streaming)</strong></small><br>
+            <small><i class="bi bi-cpu"></i> <strong>Llama 3 + Vision</strong></small><br>
             <small style="font-size:10px">ID: <span id="sessId">...</span></small>
         </div>
 
@@ -239,15 +309,25 @@
         <div id="chatBox" class="flex-grow-1 p-4 overflow-auto">
             <div class="message-row ai">
                 <div class="ai-avatar">AI</div>
-                <div class="message-content">Xin chào! Tôi có thể giúp gì cho bạn về thông tin nông sản và kho hàng hôm nay?</div>
+                <div class="message-content">Xin chào! Tôi có thể giúp gì cho bạn về thông tin nông sản và kho hàng hôm nay? Bạn cũng có thể tải ảnh lên để tôi nhận diện.</div>
             </div>
         </div>
 
         <div id="loadingStatus" class="px-5 mb-2 text-muted fst-italic" style="display: none; font-size: 13px;">AI đang gõ...</div>
 
         <div class="input-area">
+            <div id="imgPreviewContainer" style="display:none;">
+                <img id="imgPreview" src="" alt="Preview">
+                <button type="button" class="btn-remove-img" onclick="clearImage()"><i class="bi bi-x"></i></button>
+            </div>
+
             <form id="chatForm" class="position-relative m-0">
-                <input type="text" id="userInp" class="form-control custom-input" placeholder="Nhập câu hỏi..." autocomplete="off">
+                <label for="imageInp" class="btn-action btn-image" title="Đính kèm ảnh">
+                    <i class="bi bi-image fs-5"></i>
+                    <input type="file" id="imageInp" accept="image/*" style="display:none" onchange="previewImage(this)">
+                </label>
+
+                <input type="text" id="userInp" class="form-control custom-input" placeholder="Nhập câu hỏi hoặc đính kèm ảnh..." autocomplete="off">
                 <button id="btnSend" type="submit" class="btn-action btn-send"><i class="bi bi-send-fill fs-4"></i></button>
                 <button id="btnStop" type="button" class="btn-action btn-stop" onclick="stopGeneration()"><i class="bi bi-stop-fill fs-5"></i></button>
             </form>
@@ -256,19 +336,44 @@
 </div>
 
 <script>
-    // Khởi tạo
     function generateUUID() { return Math.random().toString(36).substring(2) + Date.now().toString(36); }
     const urlParams = new URLSearchParams(window.location.search);
     let currentSessionId = urlParams.get('session') || generateUUID();
     document.getElementById("sessId").innerText = currentSessionId.substring(0,8);
     let abortController = null;
 
-    // Load dữ liệu ban đầu
+    // Biến lưu trữ ảnh Base64
+    let selectedImageBase64 = null;
+
     loadSessionsList();
     if(urlParams.get('session')) loadConversation(currentSessionId);
 
-    async function loadSessionsList()
-    {
+    // --- XỬ LÝ ẢNH ---
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+
+            // Đọc file để hiển thị preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Tách lấy phần data base64 (bỏ đi đoạn 'data:image/jpeg;base64,')
+                selectedImageBase64 = e.target.result.split(',')[1];
+
+                document.getElementById("imgPreview").src = e.target.result;
+                document.getElementById("imgPreviewContainer").style.display = "inline-block";
+                document.getElementById("userInp").focus();
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function clearImage() {
+        selectedImageBase64 = null;
+        document.getElementById("imageInp").value = "";
+        document.getElementById("imgPreviewContainer").style.display = "none";
+    }
+
+    async function loadSessionsList() {
         try {
             const res = await fetch('/History/GetSessions');
             const sessions = await res.json();
@@ -298,26 +403,18 @@
         } catch(e) { console.error("Lỗi tải lịch sử:", e); }
     }
 
-    // --- XỬ LÝ FORMAT TIN NHẮN (Bao gồm Nút Gợi Ý) ---
     function formatAIMessage(rawText, showButtons = false) {
         let suggestions = [];
-
-        // Cắt bỏ chuỗi [SUGGESTION] và lấy nội dung phía sau nó
         let mainText = rawText.replace(/\[SUGGESTION\](.*)/g, function(match, suggestionText) {
-            if (suggestionText.trim()) {
-                suggestions.push(suggestionText.trim());
-            }
-            return ""; // Xóa dòng [SUGGESTION] khỏi màn hình chính
+            if (suggestionText.trim()) suggestions.push(suggestionText.trim());
+            return "";
         });
 
-        // Dùng marked để render Markdown các phần còn lại
         let htmlContent = marked.parse(mainText.trim());
 
-        // Nếu cho phép hiển thị button (tin nhắn cuối cùng) và có gợi ý
         if (showButtons && suggestions.length > 0) {
             let buttonsHtml = '<div class="ai-suggestion-container">';
             suggestions.forEach(s => {
-                // Escape dấu nháy đơn để tránh lỗi click Javascript
                 let safeText = s.replace(/'/g, "\\'");
                 buttonsHtml += `<button class="ai-suggestion-btn" onclick="sendSuggestion('${safeText}')"><i class="bi bi-search"></i> ${s}</button>`;
             });
@@ -328,7 +425,6 @@
         return htmlContent;
     }
 
-    // --- TẢI NỘI DUNG CUỘC TRÒ CHUYỆN CŨ ---
     async function loadConversation(sessionId) {
         try {
             const res = await fetch('/History/GetConversation?sessionId=' + sessionId);
@@ -339,8 +435,6 @@
             messages.forEach(m => {
                 const role = m.isAi ? "ai" : "user";
                 const avatar = m.isAi ? `<div class="ai-avatar">AI</div>` : "";
-
-                // Khi tải lịch sử cũ, KHÔNG hiển thị lại nút bấm (truyền tham số false)
                 const content = m.isAi ? formatAIMessage(m.content, false) : m.content;
                 chatBox.innerHTML += `<div class="message-row ${role}">${avatar}<div class="message-content">${content}</div></div>`;
             });
@@ -348,49 +442,63 @@
         } catch(e) { console.error(e); }
     }
 
-    // Bắt sự kiện Gợi ý
     function sendSuggestion(text) {
         document.getElementById("userInp").value = text;
         sendMessageAction(text);
     }
 
-    // Bắt sự kiện Submit form
     document.getElementById("chatForm").addEventListener("submit", function(e) {
         e.preventDefault();
         const input = document.getElementById("userInp");
         const msg = input.value.trim();
-        if (msg) sendMessageAction(msg);
+        // Cho phép gửi nếu có tin nhắn HOẶC có hình ảnh
+        if (msg || selectedImageBase64) sendMessageAction(msg);
     });
 
-    // --- LUỒNG XỬ LÝ GỬI TIN NHẮN CHÍNH ---
     async function sendMessageAction(msg) {
         const input = document.getElementById("userInp");
         const chatBox = document.getElementById("chatBox");
         const loader = document.getElementById("loadingStatus");
 
-        // 1. Xóa các nút gợi ý của câu trước đó (nếu có)
         document.querySelectorAll('.ai-suggestion-container').forEach(el => el.remove());
 
-        // 2. Hiển thị tin nhắn User
-        chatBox.innerHTML += `<div class="message-row user"><div class="message-content">${msg}</div></div>`;
+        // Hiển thị tin nhắn User (Kèm hình ảnh nếu có)
+        let displayMsg = msg;
+        if (selectedImageBase64) {
+            let imgTag = `<br><img src="data:image/jpeg;base64,${selectedImageBase64}" style="max-width: 200px; border-radius: 8px; margin-top: 8px;">`;
+            displayMsg = msg ? (msg + imgTag) : imgTag;
+        }
+
+        chatBox.innerHTML += `<div class="message-row user"><div class="message-content">${displayMsg}</div></div>`;
         input.value = "";
         loader.style.display = "block";
         chatBox.scrollTop = chatBox.scrollHeight;
         toggleButtons(true);
 
-        // Lưu User Msg
+        // Lưu dữ liệu vào biến phụ rồi xóa hình ngay lập tức ở giao diện
+        let currentImgBase64 = selectedImageBase64;
+        let originalMsg = msg || "Nhận diện hình ảnh này";
+        clearImage();
+
+        // LƯU Ý C # SERVER: Hiện tại DB C# của bạn đang lưu Text.
+        // Nếu muốn lưu ảnh vào DB thì bạn phải sửa hàm SaveMessage ở C#
         await fetch('/History/SaveMessage', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ SessionId: currentSessionId, Content: msg, IsAi: false })
+            body: JSON.stringify({ SessionId: currentSessionId, Content: originalMsg, IsAi: false })
         });
 
-        // Gọi Python Streaming
+        // GỌI PYTHON
         abortController = new AbortController();
         let fullAiResponse = "";
         try {
+            // Đã chèn field 'image' vào Body gửi lên Python
             const response = await fetch('http://localhost:5000/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: currentSessionId, question: msg }),
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    question: originalMsg,
+                    image: currentImgBase64 // Gửi cho LLaVA/Moondream đọc
+                }),
                 signal: abortController.signal
             });
 
@@ -410,23 +518,18 @@
                 const chunk = decoder.decode(value, { stream: true });
                 fullAiResponse += chunk;
 
-                // Trong lúc đang stream, không render button ngay (truyền false)
-                // Nó sẽ tự ẩn các thẻ [SUGGESTION] đi nếu có
                 contentDiv.innerHTML = formatAIMessage(fullAiResponse, false);
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
 
-            // KHI STREAM XONG HOÀN TOÀN -> MỚI RENDER BUTTON (Truyền true)
             contentDiv.innerHTML = formatAIMessage(fullAiResponse, true);
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            // Lưu AI Msg (Lưu chuỗi gốc chứa [SUGGESTION] để lần sau load lên dễ ẩn)
             await fetch('/History/SaveMessage', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ SessionId: currentSessionId, Content: fullAiResponse, IsAi: true })
             });
 
-            // Reload sidebar nếu là tin nhắn đầu tiên
             if (document.getElementById("historyList").children.length <= 1) loadSessionsList();
 
         } catch (err) { if (err.name !== 'AbortError') alert("Lỗi: " + err); }
