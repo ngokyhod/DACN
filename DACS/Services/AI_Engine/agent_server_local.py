@@ -37,7 +37,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 DB_PATH = "./faiss_db_local"
 DB_CONNECTION_STRING = "mssql+pyodbc://HOA230969\\SQLEXPRESS/QuanLyPhuPham?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes&TrustServerCertificate=yes"
 
-print("⏳ Đang khởi động Server AI (BẢN STATE-GRAPH WORKFLOW TỐI THƯỢNG)...")
+print("⏳ Đang khởi động Server AI (BẢN FIX LỖI MẤT BUTTON SUGGESTION)...")
 
 # --- GLOBAL VARIABLES ---
 vector_db = None
@@ -110,7 +110,7 @@ def get_from_cache(query: str):
             if score > best_score:
                 best_score = score
                 best_item = item
-        if best_score >= 0.97: return best_item # Chỉ trả về object chứa context
+        if best_score >= 0.97: return best_item
         return None
     except: return None
 
@@ -130,8 +130,6 @@ def add_to_cache(query: str, sql_ctx: str, rag_ctx: str, sources: list):
 
 def preload_cache_from_sql():
     if not sql_engine or not embedding_model: return
-    # Vì giờ ta lưu Context thay vì Answer, dữ liệu cũ trong DB không còn tương thích.
-    # Ta bỏ qua việc nạp Cache cũ để tránh lỗi.
     print("✅ Bỏ qua load Cache SQL (Bảo vệ luồng Context Cache mới).")
 
 def get_history_from_sql(session_id: str, limit: int = 4):
@@ -168,6 +166,7 @@ if os.path.exists(DB_PATH):
 def query_products_multi(keywords: list, get_all: bool = False):
     if not sql_engine: return ""
     final_result = []
+    
     if get_all:
         query_template = text("SELECT TOP 30 sp.TenSanPham, sp.Gia, sp.MoTa, COALESCE(SUM(ltk.KhoiLuongConLai), 0) FROM SanPhams sp LEFT JOIN LoTonKhos ltk ON sp.M_SanPham = ltk.M_SanPham GROUP BY sp.M_SanPham, sp.TenSanPham, sp.Gia, sp.MoTa ORDER BY sp.TenSanPham")
         try:
@@ -176,17 +175,37 @@ def query_products_multi(keywords: list, get_all: bool = False):
             return "[[[ DỮ LIỆU SỐ LIỆU TỪ SQL (DANH SÁCH SẢN PHẨM HIỆN CÓ) ]]]\n" + "\n".join(final_result) + "\n"
         except: return ""
 
-    query_template = text("SELECT sp.TenSanPham, sp.Gia, sp.MoTa, COALESCE(SUM(ltk.KhoiLuongConLai), 0) FROM SanPhams sp LEFT JOIN LoTonKhos ltk ON sp.M_SanPham = ltk.M_SanPham WHERE sp.TenSanPham LIKE :kw GROUP BY sp.M_SanPham, sp.TenSanPham, sp.Gia, sp.MoTa")
+    seen_products = set()
     try:
         with sql_engine.connect() as conn:
             for kw in keywords:
                 kw_clean = kw.lower().replace("giá", "").strip()
-                res = conn.execute(query_template, {"kw": f"%{kw_clean}%"}).fetchall()
+                if not kw_clean: continue
+                
+                sub_keywords = kw_clean.split()
+                conditions = " AND ".join([f"sp.TenSanPham LIKE :kw{i}" for i in range(len(sub_keywords))])
+                params = {f"kw{i}": f"%{word}%" for i, word in enumerate(sub_keywords)}
+                
+                query_template = text(f"""
+                    SELECT TOP 5 sp.TenSanPham, sp.Gia, sp.MoTa, COALESCE(SUM(ltk.KhoiLuongConLai), 0) 
+                    FROM SanPhams sp 
+                    LEFT JOIN LoTonKhos ltk ON sp.M_SanPham = ltk.M_SanPham 
+                    WHERE {conditions} 
+                    GROUP BY sp.M_SanPham, sp.TenSanPham, sp.Gia, sp.MoTa
+                """)
+                
+                res = conn.execute(query_template, params).fetchall()
                 if res:
-                    for row in res: final_result.append(f"- Tên sản phẩm: {row[0]} | Đơn giá: {int(row[1]) if row[1] else 0} VNĐ/1kg | Tồn kho hiện tại: {int(row[3])} kg")
+                    for row in res:
+                        if row[0] not in seen_products:
+                            final_result.append(f"- Tên sản phẩm: {row[0]} | Đơn giá: {int(row[1]) if row[1] else 0} VNĐ/1kg | Tồn kho hiện tại: {int(row[3])} kg")
+                            seen_products.add(row[0])
+                            
         if not final_result: return ""
         return "[[[ DỮ LIỆU SỐ LIỆU TỪ SQL (BẮT BUỘC DÙNG ĐỂ TÍNH TIỀN/BÁO GIÁ) ]]]\n" + "\n".join(final_result) + "\n"
-    except: return ""
+    except Exception as e:
+        print(f"Lỗi SQL Fuzzy: {e}")
+        return ""
 
 def query_warehouses():
     if not sql_engine: return ""
@@ -199,7 +218,7 @@ def query_warehouses():
         return "[[[ DỮ LIỆU KHO HÀNG TỪ SQL (DÙNG ĐỂ TƯ VẤN LƯU TRỮ/GỬI HÀNG CHO KHÁCH) ]]]\n" + "\n".join(final_result) + "\n"
     except: return ""
 
-def hybrid_search_multi(queries: list, k: int = 3):
+def hybrid_search_multi(queries: list, k: int = 2):
     try:
         all_candidates = []
         for q in queries:
@@ -215,8 +234,22 @@ def hybrid_search_multi(queries: list, k: int = 3):
         main_query = queries[0]
         pairs = [[main_query, d.page_content] for d in unique_docs]
         scores = reranker.predict(pairs)
+        
         sorted_docs = [d for s, d in sorted(zip(scores, unique_docs), key=lambda x: x[0], reverse=True)]
-        return sorted_docs[:k]
+        
+        final_docs = []
+        for doc in sorted_docs:
+            is_dup = False
+            for f_doc in final_docs:
+                if doc.page_content[:60] in f_doc.page_content or f_doc.page_content[:60] in doc.page_content:
+                    is_dup = True
+                    break
+            if not is_dup:
+                final_docs.append(doc)
+            if len(final_docs) >= k:
+                break
+                
+        return final_docs
     except: return []
 
 # ==============================================================================
@@ -227,20 +260,22 @@ extractor_system = """Nhiệm vụ: Phân tích câu hỏi người dùng.
 2. "products_to_sell": Tên sản phẩm khách muốn BÁN chỉ lấy giá trong sql  (CŨNG TUYỆT ĐỐI KHÔNG LẤY SỐ LƯỢNG).
 3. ĐÁNH DẤU GET_ALL: Nếu hỏi "bao nhiêu sản phẩm", "danh sách", "tất cả mặt hàng", "mạt hang", "đồ bán" -> is_get_all = true.
 4. ĐÁNH DẤU TƯ VẤN KHO: Hỏi "kho nào", "gửi ở đâu" -> is_warehouse_query = true.
-5. MỞ RỘNG BẰNG TIẾNG VIỆT để tìm kiếm tài liệu.
+5. MỞ RỘNG TỪ KHÓA (Synonym): Liệt kê thêm các từ đồng nghĩa, biến thể của sản phẩm vào "expanded_queries" (VD: "trấu" -> ["vỏ lúa", "vỏ trấu", "trấu tươi"]).
+6. ROUTE: Nếu khách CẦN HỎI ĐỊNH NGHĨA/CÔNG DỤNG thì xuất "rag". Nếu khách CHỈ HỎI GIÁ/MUA/BÁN/KHO thì xuất "sql". Nếu hỏi hỗn hợp cả hai thì xuất "both".
 
 Output JSON:
 {{
+    "route": "sql/rag/both",
     "products_to_buy": ["tên sp"],
     "products_to_sell": ["tên sp"],
     "is_get_all": false,
     "is_warehouse_query": false,
-    "expanded_queries": ["câu tiếng việt"]
+    "expanded_queries": ["từ đồng nghĩa 1"]
 }}"""
 extractor_chain = ChatPromptTemplate.from_messages([("system", extractor_system), ("human", "{input}")]) | llm | JsonOutputParser()
 
 # ==============================================================================
-# PROMPT GỐC CỦA BẠN (GIỮ NGUYÊN 100%)
+# PROMPT GỐC CỦA BẠN (ĐÃ FIX LỖI ÉP BUỘC NGOẶC VUÔNG SUGGESTION)
 # ==============================================================================
 qa_system_prompt = """Bạn là Chuyên viên Tư vấn & Bán hàng xuất sắc của website Thu Gom Phụ Phẩm Nông Nghiệp. 
 
@@ -269,14 +304,18 @@ BẠN CÓ 2 NGUỒN TÀI LIỆU DƯỚI ĐÂY:
 
 ✅ CÁCH TRẢ LỜI CHO TỪNG TRƯỜNG HỢP:
 1. BÁO GIÁ KHI KHÁCH MUA VÀ TỒN KHO: Bạn LẤY CÁC CON SỐ nằm trong mục [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]] (nếu có). TUYỆT ĐỐI KHÔNG lấy giá/tỉ lệ % từ Mục PDF. Không được in ra cái tên thẻ [[[ DỮ LIỆU... ]]] này.
-2. DANH SÁCH SẢN PHẨM: Nếu người dùng hỏi có bao nhiêu sản phẩm, hãy liệt kê dựa trên dữ liệu từ SQL cung cấp.
-3. KHÁCH MUỐN BÁN CHO HỆ THỐNG: Nếu khách hỏi "tôi muốn bán...", "bán được bao nhiêu", BẠN TUYỆT ĐỐI KHÔNG DÙNG GIÁ TRONG SQL ĐỂ TRẢ LỜI. Bạn BẮT BUỘC trả lời tư vấn như sau: "Giá thu mua phụ phẩm (như trấu, vỏ cà phê...) sẽ thay đổi tùy thuộc vào độ ẩm, tạp chất và chất lượng thực tế của sản phẩm. Để biết chính xác giá thu mua, quý khách vui lòng truy cập vào trang **Thu Gom** trên hệ thống của chúng tôi. Tại đó sẽ có AI chuyên biệt phân tích và định giá chính xác lô hàng của quý khách."
+2. DANH SÁCH SẢN PHẨM: Nếu người dùng hỏi có bao nhiêu sản phẩm, hãy liệt kê dựa trên dữ liệu từ SQL cung cấp.3. KHÁCH MUỐN BÁN CHO HỆ THỐNG: Nếu khách hỏi "tôi muốn bán...", "bán được bao nhiêu", BẠN TUYỆT ĐỐI KHÔNG DÙNG GIÁ TRONG SQL ĐỂ TRẢ LỜI. Bạn BẮT BUỘC trả lời tư vấn như sau: "Giá thu mua phụ phẩm (như trấu, vỏ cà phê...) sẽ thay đổi tùy thuộc vào độ ẩm, tạp chất và chất lượng thực tế của sản phẩm. Để biết chính xác giá thu mua, quý khách vui lòng truy cập vào trang **Thu Gom** trên hệ thống của chúng tôi. Tại đó sẽ có AI chuyên biệt phân tích và định giá chính xác lô hàng của quý khách."
 4. TƯ VẤN SẢN PHẨM: Bạn hãy đọc nội dung nằm trong mục [[[ KIẾN THỨC TỪ PDF ]]] (nếu có) để tư vấn "Nó là gì", "Dùng để làm gì". Chú ý xem kỹ thẻ [Thông tin từ file: ...] ở mỗi đoạn văn để biết nội dung đó thuộc sản phẩm nào.
 5. TƯ VẤN KHO CHỨA HÀNG: Nếu khách có nhu cầu gửi hàng/lưu trữ (ví dụ "tôi có 50 tấn... kho nào hợp"), HÃY XEM MỤC [[[ DỮ LIỆU KHO HÀNG TỪ SQL ]]]. Chọn và gợi ý 1-2 kho có Trạng thái "Còn trống", Sức chứa đáp ứng đủ nhu cầu của họ và ghi rõ địa chỉ để khách đem tới.
 6. KÊU GỌI HÀNH ĐỘNG: Nếu khách mua hàng, luôn kêu gọi khách "Thêm vào giỏ hàng" hoặc "Mua trên website".
-
-== CẤU TRÚC GỢI Ý CÂU HỎI TIẾP THEO (BẮT BUỘC Ở CUỐI CÙNG) ==
-Sau khi trả lời xong, BẮT BUỘC tạo 3 câu hỏi ngắn gọn để gợi ý cho người dùng. Định dạng bắt buộc:
+7. VĂN PHONG: Chuyên nghiệp, ngắn gọn.
+✅ CÁCH TRẢ LỜI:
+- Để báo GIÁ BÁN và số lượng TỒN KHO, bạn phải LẤY CÁC CON SỐ nằm trong mục [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]] (nếu có). Không được in ra cái tên thẻ này.
+- Để tư vấn CÔNG DỤNG, bạn hãy đọc nội dung nằm trong mục [[[ KIẾN THỨC TỪ PDF ]]] (nếu có).
+- Để tư vấn KHO BÃI, hãy tìm các kho đang "Còn trống" trong mục [[[ DỮ LIỆU KHO HÀNG TỪ SQL ]]] để gợi ý.
+- Cuối câu trả lời, luôn kêu gọi khách "Thêm vào giỏ hàng" hoặc "Mua trên website".
+Sau khi trả lời xong, BẮT BUỘC tạo 3 câu hỏi ngắn gọn để gợi ý cho người dùng.
+Để hệ thống web tạo thành Button, bạn PHẢI in các câu gợi ý này ở phần CUỐI CÙNG của câu trả lời, sử dụng CHÍNH XÁC định dạng thẻ [SUGGESTION] như sau:
 [SUGGESTION] Gợi ý câu hỏi 1
 [SUGGESTION] Gợi ý câu hỏi 2
 [SUGGESTION] Gợi ý câu hỏi 3
@@ -299,7 +338,7 @@ class AgentState(TypedDict):
     has_image: bool
     image_base64: Optional[str]
     
-    # Biến trích xuất
+    route: str
     products_to_buy: List[str]
     products_to_sell: List[str]
     is_get_all: bool
@@ -307,7 +346,6 @@ class AgentState(TypedDict):
     is_selling: bool
     queries_to_search: List[str]
     
-    # Bối cảnh & Hiển thị
     sql_context: str
     rag_context: str
     source_display: List[str]
@@ -326,13 +364,15 @@ async def node_process_image(state: AgentState):
     return {"question": state["question"], "status_messages": msg}
 
 async def node_extract_intent(state: AgentState):
-    msg = ["<div class='ai-status'>🤖 AI đang phân tích ý định của bạn...</div>\n"]
+    msg = ["<div class='ai-status'>🤖 AI Router đang phân tích ý định của bạn...</div>\n"]
     q = state["question"]
     p_buy, p_sell, queries = [], [], [q]
     get_all, warehouse, selling = False, False, False
+    route_val = "both"
     
     try:
         ext = await extractor_chain.ainvoke({"input": q})
+        route_val = ext.get("route", "both")
         b = ext.get("products_to_buy", [])
         s = ext.get("products_to_sell", [])
         p_buy = [b] if isinstance(b, str) else b
@@ -344,7 +384,6 @@ async def node_extract_intent(state: AgentState):
         queries.extend(exp if isinstance(exp, list) else [])
     except: pass
 
-    # Phân tích thủ công dự phòng
     if any(k in q.lower() for k in ["muốn bán", "tôi bán", "bán được", "thu mua"]): selling = True
     if any(k in q.lower() for k in ["tất cả", "danh sách", "có những loại nào", "liệt kê", "mặt hàng", "mạt hang", "đồ bán trong cửa hàng", "đồ bán trong của hàng"]): get_all = True
     
@@ -353,11 +392,18 @@ async def node_extract_intent(state: AgentState):
         clean = q.lower().replace("giá", "").replace("của", "").replace("bao nhiêu", "").replace("mua", "").replace("ở đâu", "").replace("là gì", "").replace("?", "").replace(".", "").strip()
         p_buy = [p.strip() for p in clean.split(" và ") if p.strip()]
 
+    if selling or get_all or warehouse or p_buy:
+        if route_val == "rag": route_val = "both"
+
     return {
+        "route": route_val,
         "products_to_buy": p_buy, "products_to_sell": p_sell, 
         "is_get_all": get_all, "is_warehouse": warehouse, "is_selling": selling,
         "queries_to_search": queries, "status_messages": msg
     }
+
+def router_logic(state: AgentState):
+    return state["route"]
 
 async def node_retrieve_sql(state: AgentState):
     sql_ctx = ""
@@ -366,17 +412,18 @@ async def node_retrieve_sql(state: AgentState):
     
     if state["is_selling"]: msg.append(f"<div class='ai-status'>🤝 Đang phân tích thông tin giao dịch...</div>\n")
     
-    all_p = list(set(state["products_to_buy"] + state["products_to_sell"]))
-    p_sql = state["products_to_buy"] if state["products_to_buy"] else all_p
+    synonyms = [kw for kw in state["queries_to_search"] if kw != state["question"]]
+    all_p = list(set(state["products_to_buy"] + state["products_to_sell"] + synonyms))
+    p_sql = list(set(state["products_to_buy"] + synonyms)) if state["products_to_buy"] else all_p
 
     if state["is_get_all"]:
-        msg.append(f"<div class='ai-status'>🔍 Đang truy xuất Database kho hàng...</div>\n")
+        msg.append(f"<div class='ai-status'>🔍 AI truy xuất Database kho hàng...</div>\n")
         res = await asyncio.to_thread(query_products_multi, [], True)
         if res: 
             sql_ctx += res + "\n"
             sources.append("**Danh mục SP**")
     elif p_sql:
-        msg.append(f"<div class='ai-status'>🔍 Đang tra cứu giá bán cho {', '.join(p_sql)}...</div>\n")
+        msg.append(f"<div class='ai-status'>🔍 AI tra cứu giá Database cho {', '.join(p_sql)}...</div>\n")
         res = await asyncio.to_thread(query_products_multi, p_sql, False)
         if res: 
             sql_ctx += res + "\n"
@@ -403,10 +450,10 @@ async def node_retrieve_pdf(state: AgentState):
     all_p = list(set(state["products_to_buy"] + state["products_to_sell"]))
     
     if state["is_get_all"] and not all_p:
-        pass # Bỏ qua RAG
+        pass 
     else:
-        msg.append(f"<div class='ai-status'>📚 Đang đọc tài liệu PDF liên quan...</div>\n")
-        docs = await asyncio.to_thread(hybrid_search_multi, state["queries_to_search"], 3)
+        msg.append(f"<div class='ai-status'>📚 AI đang tìm định nghĩa từ kho PDF...</div>\n")
+        docs = await asyncio.to_thread(hybrid_search_multi, state["queries_to_search"], 2)
         if docs:
             rag_texts, links = [], []
             for doc in docs:
@@ -420,7 +467,6 @@ async def node_retrieve_pdf(state: AgentState):
                     rag_texts.append(f"📦 [Thông tin từ file: {f_name}]:\n{doc.page_content}")
                     p_num = doc.metadata.get("page_label", "1")
                     
-                    # ĐÃ SỬA: Ép dạng văn bản in đậm thay vì dùng thẻ a href HTML
                     source_text = f"📄 **{f_name}** (Trang {p_num})"
                     if source_text not in links: links.append(source_text)
             
@@ -446,7 +492,6 @@ async def node_prepare_prompt(state: AgentState):
         
     return {"final_prompt_query": final_q, "status_messages": []}
 
-# XÂY DỰNG LANGGRAPH
 workflow = StateGraph(AgentState)
 workflow.add_node("process_image", node_process_image)
 workflow.add_node("extract_intent", node_extract_intent)
@@ -456,15 +501,34 @@ workflow.add_node("prepare_prompt", node_prepare_prompt)
 
 workflow.add_edge(START, "process_image")
 workflow.add_edge("process_image", "extract_intent")
-workflow.add_edge("extract_intent", "retrieve_sql")
-workflow.add_edge("retrieve_sql", "retrieve_pdf")
+
+workflow.add_conditional_edges(
+    "extract_intent",
+    router_logic,
+    {
+        "sql": "retrieve_sql",   
+        "rag": "retrieve_pdf",   
+        "both": "retrieve_sql"   
+    }
+)
+
+def post_sql_router(state: AgentState):
+    if state["route"] == "both": return "retrieve_pdf"
+    return "prepare_prompt" 
+
+workflow.add_conditional_edges(
+    "retrieve_sql",
+    post_sql_router,
+    {"retrieve_pdf": "retrieve_pdf", "prepare_prompt": "prepare_prompt"}
+)
+
 workflow.add_edge("retrieve_pdf", "prepare_prompt")
 workflow.add_edge("prepare_prompt", END)
 
 app_graph = workflow.compile()
 
 # ==============================================================================
-# API ROUTE
+# API ROUTE 
 # ==============================================================================
 class ChatRequest(BaseModel):
     session_id: str
@@ -481,8 +545,10 @@ async def chat(req: ChatRequest):
             print(f"\n=======================================================")
             has_img = bool(req.image and req.image.strip() and req.image != "null")
             
+            yield "<div class='ai-status'>🚀 Hệ thống đã tiếp nhận yêu cầu...</div>\n"
+            await asyncio.sleep(0.1) 
+            
             if not has_img:
-                # KIỂM TRA CONTEXT CACHE
                 cached_obj = await asyncio.to_thread(get_from_cache, req.question)
                 if cached_obj:
                     print("⚡ [CACHE HIT] Lấy dữ liệu siêu tốc!")
@@ -496,6 +562,10 @@ async def chat(req: ChatRequest):
                         "input": req.question
                     }):
                         yield chunk
+                        if any(c.isdigit() for c in chunk):
+                            await asyncio.sleep(0.05)
+                        else:
+                            await asyncio.sleep(0.01)
 
                     if cached_obj.get("source_display"):
                         sources_str = " | ".join(cached_obj["source_display"])
@@ -506,6 +576,7 @@ async def chat(req: ChatRequest):
             initial_state = {
                 "question": req.question, "original_question": req.question,
                 "has_image": has_img, "image_base64": req.image if has_img else None,
+                "route": "both", 
                 "products_to_buy": [], "products_to_sell": [],
                 "is_get_all": False, "is_warehouse": False, "is_selling": False,
                 "queries_to_search": [], "sql_context": "", "rag_context": "",
@@ -513,11 +584,23 @@ async def chat(req: ChatRequest):
             }
 
             final_state = initial_state
+            quick_price_sent = False
+
             async for event in app_graph.astream(initial_state):
                 for node_name, state_update in event.items():
                     final_state.update(state_update)
+                    
                     for msg in state_update.get("status_messages", []):
                         yield msg
+                        await asyncio.sleep(0.3) 
+
+                    if node_name == "retrieve_sql" and final_state.get("sql_context") and not quick_price_sent:
+                        quick_price_sent = True
+                        raw_sql = final_state["sql_context"].split(']]]\n')[-1].strip()
+                        if raw_sql:
+                            yield f"\n> **📊 Thông tin nhanh từ hệ thống:**\n> {raw_sql}\n\n"
+                            yield "<div class='ai-status'>✍️ AI đang tổng hợp chi tiết...</div>\n"
+                            await asyncio.sleep(0.2)
 
             full_context = f"{final_state['sql_context']}\n\n{final_state['rag_context']}"
             
@@ -527,6 +610,10 @@ async def chat(req: ChatRequest):
                 "input": final_state['final_prompt_query']
             }):
                 yield chunk
+                if any(c.isdigit() for c in chunk) or "=" in chunk:
+                    await asyncio.sleep(0.06)
+                else:
+                    await asyncio.sleep(0.01)
             
             if final_state.get("source_display"):
                 sources = " | ".join(final_state["source_display"])
