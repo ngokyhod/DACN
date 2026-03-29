@@ -15,6 +15,9 @@ namespace DACS.Models.ViewModels
         public List<OrderSummaryViewModel>? RecentOrders { get; set; }
         public List<YeuCauThuGom> RecentCollectionRequests { get; internal set; }
 
+        public Models.KhachHang KhachHangInfo { get; set; }
+        public List<AIGoiYThuMuaViewModel> AIGoiYThuMua { get; set; } = new List<AIGoiYThuMuaViewModel>();
+
         public KhachHangDashboardViewModel()
         {
             RecentOrders = new List<OrderSummaryViewModel>(); // Khởi tạo list

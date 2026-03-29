@@ -49,5 +49,6 @@ namespace DACS.Models.ViewModels // Hoặc namespace phù hợp
         public int ConTrong { get; set; }
         public int GanDay { get; set; }
         public int BaoTri { get; set; }
+        public int NgungSuDung { get; set; }
     }
 }

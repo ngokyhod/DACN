@@ -97,7 +97,9 @@ namespace DACS.Controllers
                     MaTinh = model.SupplierProvince,
                     MaQuan = model.SupplierDistrict,
                     MaXa = model.SupplierWard,
-                    DiaChi_DuongApThon = model.SupplierStreet
+                    DiaChi_DuongApThon = model.SupplierStreet,
+                    Lat = model.Lat,
+                    Lng = model.Lng
                 };
 
                 // 2. Xử lý ảnh 

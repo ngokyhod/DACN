@@ -83,6 +83,7 @@ namespace DACS.Repository
         {
             var options = await _context.KhoHangs
                 .AsNoTracking()
+                .Where(kh => kh.TrangThai != KhoHangTrangThai.NgungSuDung)
                 .OrderBy(kh => kh.TenKho)
                 .Select(kh => new SelectListItem
                 {

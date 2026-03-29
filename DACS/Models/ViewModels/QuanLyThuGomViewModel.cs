@@ -5,6 +5,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DACS.Models.ViewModels
 {
+    public class AIKhoHangSuggestionViewModel
+    {
+        public string MaKho { get; set; } = "";
+        public string? TenKho { get; set; }
+        public double MatchScore { get; set; }
+        public string? SuggestedReason { get; set; }
+    }
+
     // ViewModel chính cho View Index
     public class QuanLyThuGomViewModel
     {
@@ -45,6 +53,7 @@ namespace DACS.Models.ViewModels
         public DateTime? NgayThuGom { get; set; } // Có thể là ThoiGianSanSang
         public string? TrangThai { get; set; }
         public string? TenNguoiThuGom { get; set; } // Lấy từ ApplicationUser (QuanLy)
+        public AIKhoHangSuggestionViewModel? GoiYKhoHang { get; set; }
     }
 
     // ViewModel cho phần thống kê

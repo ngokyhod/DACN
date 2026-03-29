@@ -79,6 +79,7 @@
                     @if (soLuongTonKho > 0 && Model.SanPham.TrangThai.Equals("Còn hàng", StringComparison.OrdinalIgnoreCase))
                     {
                         <button type="submit" class="btn btn-primary btn-lg">Thêm vào giỏ</button>
+                        <button type="submit" formaction="@Url.Action("BuyNow", "ShoppingCart")" class="btn btn-success btn-lg">Mua ngay</button>
                     }
                     else
                     {

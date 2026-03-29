@@ -74,6 +74,15 @@
                                     <span asp-validation-for="SupplierStreet" class="text-danger field-validation-error"></span>
                                 </div>
                             </div>
+                            <div class="mb-3">
+                                <div id="pickupMap" style="height: 320px; width: 100%; border: 1px solid #ced4da; border-radius: 0.25rem; margin-bottom: 10px;"></div>
+                                <div id="pickupAddressStatus" class="form-text mb-2 text-muted"></div>
+                                <input type="hidden" asp-for="Lat" id="PickupLat" />
+                                <input type="hidden" asp-for="Lng" id="PickupLng" />
+                                <small class="text-muted">Tọa độ hiện tại: <span id="pickupCoordDisplay">Chưa có</span></small>
+                                <span asp-validation-for="Lat" class="text-danger d-block"></span>
+                                <span asp-validation-for="Lng" class="text-danger d-block"></span>
+                            </div>
                             <hr />
                             <div class="mb-3">
                                 <label asp-for="PickupReadyTime" class="form-label"></label> <span class="text-danger">*</span>
@@ -253,6 +262,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
     @await Html.PartialAsync("_ValidationScriptsPartial") @* Script validation *@
     <script>
@@ -488,6 +499,141 @@
             const provinceSelect = $('#provinceSelectThuGom');
             const districtSelect = $('#districtSelectThuGom');
             const wardSelect = $('#wardSelectThuGom');
+            const streetInput = $('#SupplierStreet');
+            const latInput = $('#PickupLat');
+            const lngInput = $('#PickupLng');
+            const coordDisplay = $('#pickupCoordDisplay');
+            const addressStatus = $('#pickupAddressStatus');
+            let pickupMap = null;
+            let pickupMarker = null;
+            let geocodeSequence = 0;
+            let houseSearchTimer = null;
+
+            function setAddressStatus(message, cssClass) {
+                addressStatus.removeClass('text-danger text-success text-muted').addClass(cssClass || 'text-muted').text(message || '');
+            }
+
+            function formatCoordinateInput(value) {
+                return Number.isFinite(value) ? value.toFixed(6).replace('.', ',') : '';
+            }
+
+            function updateMarker(lat, lng) {
+                if (!pickupMap) {
+                    return;
+                }
+
+                if (pickupMarker) {
+                    pickupMap.removeLayer(pickupMarker);
+                }
+
+                pickupMarker = L.marker([lat, lng]).addTo(pickupMap);
+                latInput.val(formatCoordinateInput(lat));
+                lngInput.val(formatCoordinateInput(lng));
+                coordDisplay.text(lat.toFixed(6) + ', ' + lng.toFixed(6));
+            }
+
+            function getSelectedText(selectElement) {
+                const selectedOption = selectElement.find(':selected');
+                return selectedOption.length ? selectedOption.text().trim() : '';
+            }
+
+            function buildAdministrativeQuery(level) {
+                const province = getSelectedText(provinceSelect);
+                const district = getSelectedText(districtSelect);
+                const ward = getSelectedText(wardSelect);
+                const parts = [];
+
+                if (level === 'ward' && ward && !ward.startsWith('--')) {
+                    parts.push(ward);
+                }
+
+                if ((level === 'ward' || level === 'district') && district && !district.startsWith('--')) {
+                    parts.push(district);
+                }
+
+                if (province && !province.startsWith('--')) {
+                    parts.push(province);
+                }
+
+                parts.push('Viet Nam');
+                return parts.join(', ');
+            }
+
+            function buildFullStreetQuery() {
+                const street = streetInput.val().trim();
+                const ward = getSelectedText(wardSelect);
+                const district = getSelectedText(districtSelect);
+                const province = getSelectedText(provinceSelect);
+
+                if (!street || !ward || !district || !province || ward.startsWith('--') || district.startsWith('--') || province.startsWith('--')) {
+                    return '';
+                }
+
+                return [street, ward, district, province, 'Viet Nam'].join(', ');
+            }
+
+            function searchMapAddress(query, zoomLevel, successMessage, errorMessage) {
+                if (!query || !pickupMap) {
+                    return;
+                }
+
+                const currentSequence = ++geocodeSequence;
+                setAddressStatus('Đang định vị: ' + query, 'text-muted');
+
+                $.getJSON('https://nominatim.openstreetmap.org/search', {
+                    format: 'json',
+                    limit: 1,
+                    countrycodes: 'vn',
+                    q: query
+                }).done(function (data) {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        pickupMap.setView([lat, lng], zoomLevel || 15);
+                        updateMarker(lat, lng);
+                        setAddressStatus(successMessage, 'text-success');
+                    } else if (errorMessage) {
+                        setAddressStatus(errorMessage, 'text-danger');
+                    }
+                }).fail(function () {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+                    setAddressStatus(errorMessage || 'Không tìm thấy địa chỉ trên bản đồ.', 'text-danger');
+                });
+            }
+
+            function initPickupMap() {
+                const latValue = parseFloat((latInput.val() || '').toString().replace(',', '.'));
+                const lngValue = parseFloat((lngInput.val() || '').toString().replace(',', '.'));
+                const lat = Number.isFinite(latValue) ? latValue : 10.762622;
+                const lng = Number.isFinite(lngValue) ? lngValue : 106.660172;
+
+                pickupMap = L.map('pickupMap').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(pickupMap);
+
+                if (Number.isFinite(latValue) && Number.isFinite(lngValue)) {
+                    updateMarker(latValue, lngValue);
+                } else {
+                    coordDisplay.text('Chưa có');
+                }
+
+                pickupMap.on('click', function (event) {
+                    updateMarker(event.latlng.lat, event.latlng.lng);
+                    setAddressStatus('Đã ghim vị trí thủ công cho địa chỉ thu gom.', 'text-success');
+                });
+
+                window.setTimeout(function () {
+                    pickupMap.invalidateSize();
+                }, 250);
+            }
 
             function resetDropdown(dropdown, defaultText, disabled) {
                 dropdown.empty().append($('<option>', {
@@ -531,6 +677,13 @@
                         .fail(function () {
                             resetDropdown(districtSelect, 'Lỗi tải Quận/Huyện', true);
                         });
+
+                    searchMapAddress(
+                        buildAdministrativeQuery('province'),
+                        10,
+                        'Bản đồ đã chuyển tới tỉnh/thành phố đã chọn.',
+                        'Không tìm thấy vị trí của tỉnh/thành phố này trên bản đồ.'
+                    );
                 }
             });
 
@@ -556,7 +709,46 @@
                          .fail(function () {
                              resetDropdown(wardSelect, 'Lỗi tải Xã/Phường', true);
                          });
+
+                    searchMapAddress(
+                        buildAdministrativeQuery('district'),
+                        12,
+                        'Bản đồ đã chuyển tới quận/huyện đã chọn.',
+                        'Không tìm thấy vị trí của quận/huyện này trên bản đồ.'
+                    );
                 }
+            });
+
+            wardSelect.on('change', function () {
+                searchMapAddress(
+                    buildAdministrativeQuery('ward'),
+                    14,
+                    'Bản đồ đã chuyển tới phường/xã đã chọn.',
+                    'Không tìm thấy vị trí của phường/xã này trên bản đồ.'
+                );
+            });
+
+            streetInput.on('input', function () {
+                if (houseSearchTimer) {
+                    clearTimeout(houseSearchTimer);
+                }
+
+                const fullStreetQuery = buildFullStreetQuery();
+                if (!fullStreetQuery) {
+                    if (streetInput.val().trim()) {
+                        setAddressStatus('Hãy chọn đủ tỉnh, quận/huyện, phường/xã trước khi định vị số nhà và tên đường.', 'text-muted');
+                    }
+                    return;
+                }
+
+                houseSearchTimer = setTimeout(function () {
+                    searchMapAddress(
+                        fullStreetQuery,
+                        17,
+                        'Đã định vị theo số nhà và tên đường.',
+                        'Không định vị chính xác được số nhà/tên đường. Bạn có thể ghim trực tiếp trên bản đồ để chỉnh chuẩn hơn.'
+                    );
+                }, 700);
             });
 
             // === LOGIC MỚI CHO SẢN PHẨM ===
@@ -606,6 +798,20 @@
                 }
             });
             // === KẾT THÚC LOGIC MỚI ===
+
+            initPickupMap();
+
+            if (provinceSelect.val()) {
+                const initialQuery = buildFullStreetQuery() || buildAdministrativeQuery('ward');
+                if (initialQuery) {
+                    searchMapAddress(
+                        initialQuery,
+                        buildFullStreetQuery() ? 17 : 14,
+                        'Đã đồng bộ vị trí hiện tại với địa chỉ thu gom.',
+                        'Không thể đồng bộ vị trí hiện tại trên bản đồ. Bạn có thể ghim tay.'
+                    );
+                }
+            }
 
         });
     </script>

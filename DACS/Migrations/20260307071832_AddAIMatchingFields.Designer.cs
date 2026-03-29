@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DACS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260307071832_AddAIMatchingFields")]
+    partial class AddAIMatchingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -694,14 +697,6 @@ namespace DACS.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.Property<string>("DiaChiDoanhNghiep")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("DiaChiDuongDoanhNghiep")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("DiaChi_DuongApThon")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -710,12 +705,6 @@ namespace DACS.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<double?>("EnterpriseLat")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("EnterpriseLng")
-                        .HasColumnType("float");
-
                     b.Property<string>("FirebaseID")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
@@ -723,10 +712,6 @@ namespace DACS.Migrations
                     b.Property<string>("Gender")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
-
-                    b.Property<string>("GiayPhepKinhDoanhUrl")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -743,25 +728,13 @@ namespace DACS.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
-                    b.Property<string>("MaQuanDoanhNghiep")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
                     b.Property<string>("MaTinh")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
-                    b.Property<string>("MaTinhDoanhNghiep")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
                     b.Property<string>("MaXa")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<string>("MaXaDoanhNghiep")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
@@ -779,10 +752,6 @@ namespace DACS.Migrations
 
                     b.Property<string>("Ten_KhachHang")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TinhThanhDoanhNghiep")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -1222,6 +1191,13 @@ namespace DACS.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<double?>("AI_PriorityScore")
+                        .HasColumnType("float");
+
+                    b.Property<string>("AI_SuggestedAction")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<string>("BlockchainTransactionHash")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1235,12 +1211,6 @@ namespace DACS.Migrations
 
                     b.Property<string>("GhiChu")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<double?>("Lat")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("Lng")
-                        .HasColumnType("float");
 
                     b.Property<string>("M_KhachHang")
                         .IsRequired()
@@ -1274,6 +1244,9 @@ namespace DACS.Migrations
 
                     b.Property<DateTime>("ThoiGianSanSang")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("ThoiGianTon_ToiDa")
+                        .HasColumnType("int");
 
                     b.Property<string>("TrangThai")
                         .IsRequired()

@@ -5,6 +5,7 @@ using System.Security.Claims;
 using DACS.Models;
 using DACS.Models.ViewModels;
 using DACS.Repositories;
+using DACS.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +28,7 @@ namespace DACS.Areas.KhachHang.Controllers
         private readonly ILogger<KhachHangController> _logger;
         private readonly ISanPhamRepository _sanPhamRepo; // <<< Inject Repository NguoiMu
         private readonly IThuGomRepository _thuGomRepository;
+                private readonly AIMatchingService _aiMatchingService;
         public KhachHangController(
       ApplicationDbContext context, // <<< Thêm lại tham số context
          UserManager<ApplicationUser> userManager,
@@ -34,7 +36,8 @@ namespace DACS.Areas.KhachHang.Controllers
       INguoiMuaRepository nguoiMuaRepository,
       ILogger<KhachHangController> logger,
       ISanPhamRepository sanPhamRepo,
-      IThuGomRepository thuGomRepository
+            IThuGomRepository thuGomRepository,
+            AIMatchingService aiMatchingService
       )
         {
             _context = context; // <<< Gán lại context
@@ -44,6 +47,7 @@ namespace DACS.Areas.KhachHang.Controllers
             _logger = logger;
             _sanPhamRepo = sanPhamRepo;
             _thuGomRepository = thuGomRepository;
+                        _aiMatchingService = aiMatchingService;
         }
 
         public async Task<IActionResult> Index()
@@ -57,7 +61,9 @@ namespace DACS.Areas.KhachHang.Controllers
 
             // Tạo ViewModel để chứa dữ liệu
             var dashboardViewModel = new KhachHangDashboardViewModel(); // Renamed variable to avoid conflict
-            var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(kh => kh.UserId == userId);
+            var khachHang = await _context.KhachHangs
+                .Include(kh => kh.TinhThanhPho)
+                .FirstOrDefaultAsync(kh => kh.UserId == userId);
 
             var nguoiMuaProfile = await _context.KhachHangs
                                      .Include(kh => kh.TinhThanhPho) // Tải TinhThanhPho
@@ -179,9 +185,174 @@ namespace DACS.Areas.KhachHang.Controllers
 
             dashboardViewModel.RecentCollectionRequests = recentCollectionRequestsData.ToList();
 
+            dashboardViewModel.KhachHangInfo = khachHang;
+
             // 4. Truyền ViewModel tới View Index.cshtml
             return View(dashboardViewModel);
 
+        }
+
+        public async Task<IActionResult> AIMatching()
+        {
+            var userId = _userManager.GetUserId(User);
+            if (userId == null)
+            {
+                return Challenge();
+            }
+
+            var khachHang = await _context.KhachHangs
+                .Include(kh => kh.TinhThanhPho)
+                .FirstOrDefaultAsync(kh => kh.UserId == userId);
+
+            if (khachHang == null || !khachHang.IsEnterpriseVerified || string.IsNullOrWhiteSpace(khachHang.NhuCauChinh))
+            {
+                TempData["ErrorMessage"] = "Tính năng AI Matching chỉ dành cho tài khoản doanh nghiệp đã xác thực.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var currentUser = await _userManager.GetUserAsync(User);
+            var nguoiMuaProfile = await _context.KhachHangs
+                .Include(kh => kh.TinhThanhPho)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(kh => kh.UserId == userId);
+
+            var viewModel = new KhachHangDashboardViewModel
+            {
+                TenNguoiMua = khachHang.Ten_KhachHang ?? currentUser?.FullName ?? currentUser?.UserName,
+                EmailNguoiMua = khachHang.Email_KhachHang ?? currentUser?.Email,
+                SdtNguoiMua = khachHang.SDT_KhachHang ?? currentUser?.PhoneNumber,
+                KhachHangInfo = khachHang,
+                AIGoiYThuMua = await BuildEnterpriseSuggestionsAsync(khachHang, nguoiMuaProfile)
+            };
+
+            return View(viewModel);
+        }
+
+        private static string? ExtractProvinceFromAddress(string? address)
+        {
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                return null;
+            }
+
+            var segments = address.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return segments.Length >= 1 ? segments[^1] : address;
+        }
+
+        private async Task<List<AIGoiYThuMuaViewModel>> BuildEnterpriseSuggestionsAsync(Models.KhachHang khachHang, Models.KhachHang? nguoiMuaProfile)
+        {
+            try
+            {
+                var availableLots = await _context.LoTonKhos
+                    .Include(lo => lo.KhoHang)
+                    .Include(lo => lo.SanPham)
+                    .Include(lo => lo.DonViTinh)
+                    .Include(lo => lo.ChiTietThuGoms)
+                        .ThenInclude(ct => ct.YeuCauThuGom)
+                    .Where(lo => lo.KhoiLuongConLai > 0
+                        && lo.KhoHang.TrangThai != KhoHangTrangThai.BaoTri
+                        && lo.KhoHang.TrangThai != KhoHangTrangThai.NgungSuDung)
+                    .OrderByDescending(lo => lo.NgayNhapKho)
+                    .ThenByDescending(lo => lo.KhoiLuongConLai)
+                    .ToListAsync();
+
+                var stockLots = availableLots.Select(lo => new
+                {
+                    m_yeucau = lo.ChiTietThuGoms
+                        .Select(ct => ct.YeuCauThuGom != null ? ct.YeuCauThuGom.M_YeuCau : ct.M_YeuCau)
+                        .FirstOrDefault(),
+                    ma_san_pham = lo.M_SanPham,
+                    ma_lo_ton_kho = lo.MaLoTonKho,
+                    ma_kho = lo.MaKho,
+                    ten_kho = lo.KhoHang?.TenKho,
+                    ten_san_pham = lo.SanPham?.TenSanPham ?? "Không rõ",
+                    khoi_luong_con_lai = lo.KhoiLuongConLai,
+                    don_vi_tinh = lo.DonViTinh?.TenLoaiTinh,
+                    dia_chi_kho = lo.KhoHang?.DiaChi,
+                    tinh_thanh = ExtractProvinceFromAddress(lo.KhoHang?.DiaChi),
+                    lat = lo.KhoHang?.Lat,
+                    lng = lo.KhoHang?.Lng
+                }).Cast<object>().ToList();
+
+                var enterpriseLocation = khachHang.TinhThanhDoanhNghiep
+                    ?? khachHang.TinhThanhPho?.TenTinh
+                    ?? nguoiMuaProfile?.TinhThanhPho?.TenTinh
+                    ?? string.Empty;
+
+                var suggestions = await _aiMatchingService.GetEnterpriseStockSuggestionsAsync(
+                    stockLots,
+                    khachHang.NhuCauChinh,
+                    enterpriseLocation,
+                    khachHang.DiaChiDoanhNghiep,
+                    khachHang.EnterpriseLat,
+                    khachHang.EnterpriseLng);
+
+                var lotLookup = availableLots.ToDictionary(lo => lo.MaLoTonKho, StringComparer.OrdinalIgnoreCase);
+                foreach (var suggestion in suggestions)
+                {
+                    if (!lotLookup.TryGetValue(suggestion.MaLoTonKho, out var lot))
+                    {
+                        continue;
+                    }
+
+                    suggestion.MaSanPham ??= lot.M_SanPham;
+                    suggestion.Gia = lot.SanPham?.Gia ?? 0;
+                }
+
+                return suggestions
+                    .Where(item => !string.IsNullOrWhiteSpace(item.MaSanPham) && !string.IsNullOrWhiteSpace(item.MaKho))
+                    .GroupBy(item => $"{item.MaSanPham}|{item.MaKho}", StringComparer.OrdinalIgnoreCase)
+                    .Select(group =>
+                    {
+                        var bestMatch = group
+                            .OrderByDescending(item => item.MatchScore)
+                            .ThenByDescending(item => item.SoLuong)
+                            .First();
+
+                        var totalQuantity = availableLots
+                            .Where(lo => string.Equals(lo.M_SanPham, bestMatch.MaSanPham, StringComparison.OrdinalIgnoreCase)
+                                && string.Equals(lo.MaKho, bestMatch.MaKho, StringComparison.OrdinalIgnoreCase))
+                            .Sum(lo => Convert.ToDouble(lo.KhoiLuongConLai));
+
+                        bestMatch.SoLuong = totalQuantity;
+                        bestMatch.KhoiLuongMuaDeXuat = totalQuantity >= 1d ? 1d : Math.Max(totalQuantity, 0d);
+                        var khoProvince = ExtractProvinceFromAddress(bestMatch.DiaChiKho);
+                        var sameProvince = !string.IsNullOrWhiteSpace(enterpriseLocation)
+                            && !string.IsNullOrWhiteSpace(khoProvince)
+                            && string.Equals(enterpriseLocation.Trim(), khoProvince.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                        if (bestMatch.DistanceKm.HasValue)
+                        {
+                            bestMatch.ProximityLabel = $"Cách doanh nghiệp {bestMatch.DistanceKm.Value:0.#} km";
+                            bestMatch.SuggestedReason = $"Kho được AI ưu tiên vì gần doanh nghiệp khoảng {bestMatch.DistanceKm.Value:0.#} km và có mức khớp nhu cầu cao.";
+                        }
+                        else
+                        {
+                            bestMatch.ProximityLabel = sameProvince
+                                ? "Cùng tỉnh doanh nghiệp"
+                                : "Kho AI gần nhất";
+
+                            bestMatch.SuggestedReason = sameProvince
+                                ? "Được ưu tiên vì kho này cùng tỉnh và có mức khớp nhu cầu cao."
+                                : "Được AI chọn vì là kho phù hợp gần doanh nghiệp với lượng hàng sẵn có tốt.";
+                        }
+                        return bestMatch;
+                    })
+                    .GroupBy(item => item.MaSanPham!, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group
+                        .OrderByDescending(item => item.MatchScore)
+                        .ThenByDescending(item => item.SoLuong)
+                        .First())
+                    .OrderByDescending(item => item.MatchScore)
+                    .ThenByDescending(item => item.SoLuong)
+                    .Take(10)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi gọi AI Matching");
+                return new List<AIGoiYThuMuaViewModel>();
+            }
         }
 
         // GET: /KhachHang/KhachHang/HoSoCaNhan
@@ -503,6 +674,166 @@ namespace DACS.Areas.KhachHang.Controllers
 
 
 
+                  [HttpGet]
+          public async Task<IActionResult> DangKyDoanhNghiep()
+          {
+              var userId = _userManager.GetUserId(User);
+              if (string.IsNullOrEmpty(userId)) return NotFound();
+
+              var khachHang = await _context.KhachHangs
+                  .Include(kh => kh.TinhThanhPho)
+                  .Include(kh => kh.QuanHuyen)
+                  .Include(kh => kh.XaPhuong)
+                  .FirstOrDefaultAsync(kh => kh.UserId == userId);
+              if (khachHang == null) return NotFound();
+
+              var model = new DangKyDoanhNghiepViewModel
+              {
+                  TenDoanhNghiep = khachHang.TenDoanhNghiep ?? "",
+                  LinhVucHoatDong = khachHang.LinhVucHoatDong ?? "",
+                  NhuCauChinh = khachHang.NhuCauChinh ?? "",
+                  MaTinhDoanhNghiep = khachHang.MaTinhDoanhNghiep ?? khachHang.MaTinh ?? "",
+                  MaQuanDoanhNghiep = khachHang.MaQuanDoanhNghiep ?? khachHang.MaQuan ?? "",
+                  MaXaDoanhNghiep = khachHang.MaXaDoanhNghiep ?? khachHang.MaXa ?? "",
+                  DiaChiDuongDoanhNghiep = khachHang.DiaChiDuongDoanhNghiep ?? khachHang.DiaChi_DuongApThon ?? "",
+                  DiaChiDoanhNghiep = khachHang.DiaChiDoanhNghiep,
+                  EnterpriseLat = khachHang.EnterpriseLat,
+                  EnterpriseLng = khachHang.EnterpriseLng,
+                  GiayPhepKinhDoanhUrl = khachHang.GiayPhepKinhDoanhUrl
+              };
+
+              ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
+              ViewBag.Provinces = await _context.TinhThanhPhos
+                  .OrderBy(t => t.TenTinh)
+                  .Select(t => new { id = t.MaTinh, name = t.TenTinh })
+                  .ToListAsync();
+              ViewBag.EnterpriseReviewStatus = khachHang.IsEnterpriseVerified
+                  ? "approved"
+                  : !string.IsNullOrWhiteSpace(khachHang.TenDoanhNghiep)
+                      ? "pending"
+                      : "new";
+
+              return View(model);
+          }
+
+          [HttpPost]
+          public async Task<IActionResult> DangKyDoanhNghiep(DangKyDoanhNghiepViewModel model)
+          {
+              if (TryReadCoordinateFromForm("EnterpriseLat", out var parsedLat))
+              {
+                  model.EnterpriseLat = parsedLat;
+                  ModelState.Remove(nameof(model.EnterpriseLat));
+              }
+
+              if (TryReadCoordinateFromForm("EnterpriseLng", out var parsedLng))
+              {
+                  model.EnterpriseLng = parsedLng;
+                  ModelState.Remove(nameof(model.EnterpriseLng));
+              }
+
+              if (ModelState.IsValid)
+              {
+                  var userId = _userManager.GetUserId(User);
+                  var khachHang = await _context.KhachHangs
+                      .FirstOrDefaultAsync(kh => kh.UserId == userId);
+                  if (khachHang != null)
+                  {
+                      var provinceName = await _context.TinhThanhPhos
+                          .Where(t => t.MaTinh == model.MaTinhDoanhNghiep)
+                          .Select(t => t.TenTinh)
+                          .FirstOrDefaultAsync();
+                      var districtName = await _context.QuanHuyens
+                          .Where(q => q.MaQuan == model.MaQuanDoanhNghiep)
+                          .Select(q => q.TenQuan)
+                          .FirstOrDefaultAsync();
+                      var wardName = await _context.XaPhuongs
+                          .Where(x => x.MaXa == model.MaXaDoanhNghiep)
+                          .Select(x => x.TenXa)
+                          .FirstOrDefaultAsync();
+
+                      khachHang.MaTinhDoanhNghiep = model.MaTinhDoanhNghiep;
+                      khachHang.MaQuanDoanhNghiep = model.MaQuanDoanhNghiep;
+                      khachHang.MaXaDoanhNghiep = model.MaXaDoanhNghiep;
+                      khachHang.DiaChiDuongDoanhNghiep = model.DiaChiDuongDoanhNghiep;
+                      khachHang.TenDoanhNghiep = model.TenDoanhNghiep;
+                      khachHang.LinhVucHoatDong = model.LinhVucHoatDong;
+                      khachHang.NhuCauChinh = model.NhuCauChinh;
+                      khachHang.DiaChiDoanhNghiep = string.Join(", ", new[]
+                      {
+                          model.DiaChiDuongDoanhNghiep?.Trim(),
+                          wardName,
+                          districtName,
+                          provinceName
+                      }.Where(part => !string.IsNullOrWhiteSpace(part)));
+                      khachHang.TinhThanhDoanhNghiep = provinceName;
+                      khachHang.EnterpriseLat = model.EnterpriseLat;
+                      khachHang.EnterpriseLng = model.EnterpriseLng;
+                      khachHang.IsEnterpriseVerified = false;
+
+                      // Xử lý upload ảnh
+                      if (model.GiayPhepKinhDoanh != null)
+                      {
+                          string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads/giayphep");
+                          Directory.CreateDirectory(uploadsFolder);
+                          string uniqueFileName = Guid.NewGuid().ToString() + "_" + model.GiayPhepKinhDoanh.FileName;
+                          string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                          using (var fileStream = new FileStream(filePath, FileMode.Create))
+                          {
+                              await model.GiayPhepKinhDoanh.CopyToAsync(fileStream);
+                          }
+                          khachHang.GiayPhepKinhDoanhUrl = "/uploads/giayphep/" + uniqueFileName;
+                      }
+
+                      _context.Update(khachHang);
+                      await _context.SaveChangesAsync();
+
+                      TempData["SuccessMessage"] = "Đăng ký thông tin doanh nghiệp thành công. Vui lòng chờ admin duyệt!";
+                      return RedirectToAction("HoSoCaNhan");
+                  }
+
+                  TempData["ErrorMessage"] = "Không tìm thấy hồ sơ khách hàng để cập nhật thông tin doanh nghiệp.";
+              }
+
+              if (!ModelState.IsValid)
+              {
+                  TempData["ErrorMessage"] = "Chưa thể lưu đăng ký doanh nghiệp. Vui lòng kiểm tra lại các trường đang báo lỗi.";
+              }
+
+              ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
+              ViewBag.Provinces = await _context.TinhThanhPhos
+                  .OrderBy(t => t.TenTinh)
+                  .Select(t => new { id = t.MaTinh, name = t.TenTinh })
+                  .ToListAsync();
+              ViewBag.EnterpriseReviewStatus = "new";
+              return View(model);
+          }
+
+          private bool TryReadCoordinateFromForm(string fieldName, out double? coordinate)
+          {
+              coordinate = null;
+
+              if (!Request.HasFormContentType)
+              {
+                  return false;
+              }
+
+              var rawValue = Request.Form[fieldName].ToString()?.Trim();
+              if (string.IsNullOrWhiteSpace(rawValue))
+              {
+                  return false;
+              }
+
+              if (double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var invariantValue) ||
+                  double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out invariantValue))
+              {
+                  coordinate = invariantValue;
+                  return true;
+              }
+
+              return false;
+          }
+
+        
         public async Task<IActionResult> LichSuDonHang(string statusFilter, string timeFilter, int page = 1)
         {
             var userId = _userManager.GetUserId(User);
@@ -1175,6 +1506,18 @@ namespace DACS.Areas.KhachHang.Controllers
 
                     M_KhachHang = khachHang.M_KhachHang,
 
+                    MaTinh = model.SupplierProvince,
+
+                    MaQuan = model.SupplierDistrict,
+
+                    MaXa = model.SupplierWard,
+
+                    DiaChi_DuongApThon = model.SupplierStreet,
+
+                    Lat = model.Lat,
+
+                    Lng = model.Lng,
+
                     NgayYeuCau = DateTime.UtcNow,
 
                     ThoiGianSanSang = model.PickupReadyTime.Value,
@@ -1379,13 +1722,17 @@ namespace DACS.Areas.KhachHang.Controllers
 
                 SupplierPhone = khachHang.SDT_KhachHang,
 
-                SupplierProvince = khachHang.MaTinh,
+                SupplierProvince = yeuCau.MaTinh,
 
-                SupplierDistrict = khachHang.MaQuan,
+                SupplierDistrict = yeuCau.MaQuan,
 
-                SupplierWard = khachHang.MaXa,
+                SupplierWard = yeuCau.MaXa,
 
-                SupplierStreet = khachHang.DiaChi_DuongApThon,
+                SupplierStreet = yeuCau.DiaChi_DuongApThon,
+
+                Lat = yeuCau.Lat,
+
+                Lng = yeuCau.Lng,
 
                 PickupReadyTime = yeuCau.ThoiGianSanSang,
 
@@ -1535,6 +1882,18 @@ namespace DACS.Areas.KhachHang.Controllers
             {
 
                 // Cập nhật YeuCauThuGom
+
+              yeuCauGoc.MaTinh = model.SupplierProvince;
+
+                yeuCauGoc.MaQuan = model.SupplierDistrict;
+
+                yeuCauGoc.MaXa = model.SupplierWard;
+
+                yeuCauGoc.DiaChi_DuongApThon = model.SupplierStreet;
+
+                yeuCauGoc.Lat = model.Lat;
+
+                yeuCauGoc.Lng = model.Lng;
 
                 yeuCauGoc.ThoiGianSanSang = model.PickupReadyTime.Value;
 

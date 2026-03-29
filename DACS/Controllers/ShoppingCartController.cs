@@ -398,18 +398,22 @@ namespace DACS.Controllers
                 return RedirectToAction("Index", "Home"); // Hoặc trang sản phẩm
             }
 
-            var cartItem = new CartItem
-            {
-                ProductId = product.M_SanPham,
-                Name = product.TenSanPham,
-                Price = product.Gia,
-                Quantity = 1, // Tạm gán là 1 (vì đang bán theo khối lượng)
-                Khoiluong = 1 // <<< SỬA: Lấy từ tham số
-            };
-            var cart = HttpContext.Session.GetObjectFromJson<ShoppingCart>("Cart") ?? new ShoppingCart();
-            cart.AddItem(cartItem);
-            HttpContext.Session.SetObjectAsJson("Cart", cart);
+            AddProductToSessionCart(product, khoiluong);
             return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> BuyNow(string productId, float khoiluong)
+        {
+            var product = await GetProductFromDatabase(productId);
+            if (product == null)
+            {
+                TempData["ErrorMessage"] = "Không tìm thấy sản phẩm.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            AddProductToSessionCart(product, khoiluong);
+            return RedirectToAction(nameof(Checkout));
         }
 
         public IActionResult Index()
@@ -422,6 +426,22 @@ namespace DACS.Controllers
         {
             var product = await _productRepository.GetByIdAsync(productId);
             return product;
+        }
+
+        private void AddProductToSessionCart(SanPham product, float khoiluong)
+        {
+            var cartItem = new CartItem
+            {
+                ProductId = product.M_SanPham,
+                Name = product.TenSanPham,
+                Price = product.Gia,
+                Quantity = 1,
+                Khoiluong = khoiluong > 0 ? khoiluong : 1
+            };
+
+            var cart = HttpContext.Session.GetObjectFromJson<ShoppingCart>("Cart") ?? new ShoppingCart();
+            cart.AddItem(cartItem);
+            HttpContext.Session.SetObjectAsJson("Cart", cart);
         }
 
         public IActionResult RemoveFromCart(string productId)

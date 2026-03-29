@@ -21,17 +21,59 @@ namespace DACS.Areas.QuanlyND.Controllers // Đảm bảo đúng namespace và A
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager; // Inject RoleManager
         private readonly ILogger<QuanLyNDController> _logger;
+        private readonly ApplicationDbContext _context;
 
         public QuanLyNDController(
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager,
-            ILogger<QuanLyNDController> logger)
+            ILogger<QuanLyNDController> logger, ApplicationDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _logger = logger;
+            _context = context;
         }
 
+
+        // GET: QuanLyND/DuyetDoanhNghiep
+        public async Task<IActionResult> DuyetDoanhNghiep()
+        {
+            var dsChoDuyet = await _context.KhachHangs
+                .Where(kh => !string.IsNullOrEmpty(kh.TenDoanhNghiep) && kh.IsEnterpriseVerified == false)
+                .ToListAsync();
+            return View(dsChoDuyet);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> XacNhanDoanhNghiep(string id)
+        {
+            var khachHang = await _context.KhachHangs.FindAsync(id);
+            if (khachHang != null)
+            {
+                khachHang.IsEnterpriseVerified = true;
+                _context.Update(khachHang);
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Đã xác nhận doanh nghiệp thành công!";
+            }
+            return RedirectToAction(nameof(DuyetDoanhNghiep));
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> TuChoiDoanhNghiep(string id)
+        {
+            var khachHang = await _context.KhachHangs.FindAsync(id);
+            if (khachHang != null)
+            {
+                khachHang.TenDoanhNghiep = null;
+                khachHang.LinhVucHoatDong = null;
+                khachHang.NhuCauChinh = null;
+                khachHang.IsEnterpriseVerified = false;
+                _context.Update(khachHang);
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Đã từ chối đăng ký doanh nghiệp!";
+            }
+            return RedirectToAction(nameof(DuyetDoanhNghiep));
+        }
         // GET: QuanlyND/QuanlyND/Index
         public async Task<IActionResult> Index(
             string? searchTerm,

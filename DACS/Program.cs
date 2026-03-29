@@ -81,6 +81,7 @@ builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.Configure<ESmsSettings>(builder.Configuration.GetSection("ESmsSettings"));
 builder.Services.AddTransient<ISmsService, ESmsService>();
 builder.Services.AddScoped<FirebaseSyncService>();
+builder.Services.AddScoped<AIMatchingService>();
 builder.Services.AddHttpClient();
 //builder.WebHost.UseUrls("http://0.0.0.0:5001");//chạy ebsite
 

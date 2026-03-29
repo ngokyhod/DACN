@@ -42,6 +42,12 @@ namespace DACS.Models
         [Display(Name = "Số nhà, Đường/Ấp/Thôn")]
         public string? DiaChi_DuongApThon { get; set; }
 
+        [Range(-90, 90, ErrorMessage = "Vĩ độ (Lat) không hợp lệ.")]
+        public double? Lat { get; set; }
+
+        [Range(-180, 180, ErrorMessage = "Kinh độ (Lng) không hợp lệ.")]
+        public double? Lng { get; set; }
+
         [ForeignKey("MaTinh")]
         public virtual TinhThanhPho? TinhThanhPho { get; set; }
         [ForeignKey("MaQuan")]

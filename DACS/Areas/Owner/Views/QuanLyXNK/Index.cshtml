@@ -175,6 +175,7 @@
             <li class="nav-item"><a asp-area="Owner" asp-controller="Owner" asp-action="Index" class="nav-link"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a></li>
             <li class="nav-item"><a asp-area="Owner" asp-controller="DoanhThu" asp-action="Index" class="nav-link"><i class="fas fa-chart-line me-2"></i> Doanh thu</a></li>
             <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyND" asp-action="Index" class="nav-link"><i class="fas fa-users me-2"></i> Quản lý Tài khoản</a></li>
+                <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyND" asp-action="DuyetDoanhNghiep" class="nav-link"><i class="fas fa-building me-2"></i> Duyệt doanh nghiệp</a></li>
             <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLySP" asp-action="Index" class="nav-link"><i class="fas fa-box-open me-2"></i> Quản lý Sản phẩm</a></li>
             <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyXNK" asp-action="Index" class="nav-link active"><i class="fas fa-truck-loading me-2"></i> Quản lý Thu gom</a></li>
             <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyDonHang" asp-action="Index" class="nav-link "><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
@@ -254,6 +255,7 @@
                             <th>Số Lượng</th>
                             <th>Ngày YC/Thu Gom</th>
                             <th>Trạng Thái</th>
+                            <th>Gợi ý kho AI</th>
                             <th class="text-center">Hành động</th>
                         </tr>
                     </thead>
@@ -273,6 +275,18 @@
                                         <small title="Ngày Thu Gom">TG: @(request.NgayThuGom?.ToString("dd/MM/yy HH:mm") ?? "N/A")</small>
                                     </td>
                                     <td><span class="badge @GetStatusBadgeClass(request.TrangThai ?? "")">@request.TrangThai</span></td>
+                                    <td style="min-width: 210px;">
+                                        @if (request.GoiYKhoHang != null)
+                                        {
+                                            <div class="fw-semibold text-success">@request.GoiYKhoHang.TenKho</div>
+                                            <div class="small text-muted">@request.GoiYKhoHang.MaKho · @request.GoiYKhoHang.MatchScore.ToString("0.#")%</div>
+                                            <div class="small text-muted">@request.GoiYKhoHang.SuggestedReason</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Chưa có gợi ý phù hợp</span>
+                                        }
+                                    </td>
                                     <td class="actions text-center">
                                         @* Các nút hành động sẽ thay đổi tùy theo trạng thái *@
                                         <a asp-action="Details" asp-route-id="@request.M_YeuCau" class="btn btn-sm btn-outline-info" title="Xem Chi tiết"><i class="fas fa-eye"></i></a>
@@ -308,6 +322,9 @@
                                             <button type="button" class="btn btn-sm btn-success btn-mark-complete"
                                                     data-bs-toggle="modal" data-bs-target="#completeConfirmationModal"
                                                     data-request-id="@request.M_YeuCau"
+                                                    data-recommended-kho="@request.GoiYKhoHang?.MaKho"
+                                                    data-recommended-kho-name="@request.GoiYKhoHang?.TenKho"
+                                                    data-recommended-score="@(request.GoiYKhoHang != null ? request.GoiYKhoHang.MatchScore.ToString("0.#") : string.Empty)"
                                                     title="Đánh dấu Hoàn thành">
                                                 <i class="fas fa-check-circle"></i>
                                             </button>
@@ -353,6 +370,7 @@
                                                     }
                                                 </select>
                                                 <div id="khoSelectError" class="text-danger mt-1" style="display: none;">Vui lòng chọn kho đích.</div>
+                                                <div class="ai-kho-suggestion-hint small text-success mt-2"></div>
                                             </div>
                                             @* Input ẩn để lưu M_YeuCau *@
                                             <input type="hidden" id="modal-request-id-hidden" />
@@ -471,6 +489,7 @@
                         }
                     </select>
                     <div id="khoSelectError" class="text-danger mt-1" style="display: none;">Vui lòng chọn kho đích.</div>
+                    <div class="ai-kho-suggestion-hint small text-success mt-2"></div>
                 </div>
                 <input type="hidden" id="modal-request-id-hidden" />
             </div>
@@ -506,9 +525,17 @@
                 // 1. Handler cho nút .btn-mark-complete
                 $(document).on('click', '.btn-mark-complete', function () {
                     requestIdToComplete = $(this).data('request-id');
+                    var recommendedKho = $(this).data('recommended-kho');
+                    var recommendedKhoName = $(this).data('recommended-kho-name');
+                    var recommendedScore = $(this).data('recommended-score');
                     $('#modal-request-id-display').text(requestIdToComplete);
                     $('#modal-request-id-hidden').val(requestIdToComplete);
-                    $('#targetKhoSelect').val('');
+                    $('#targetKhoSelect').val(recommendedKho || '');
+                    if (recommendedKho) {
+                        $('.ai-kho-suggestion-hint').text('AI gợi ý: ' + recommendedKhoName + ' (' + recommendedKho + ') - ' + recommendedScore + '%');
+                    } else {
+                        $('.ai-kho-suggestion-hint').text('');
+                    }
                     $('#khoSelectError').hide();
                      completeModal.show();
                 });
@@ -529,7 +556,7 @@
                         $('#khoSelectError').hide();
                     }
 
-                    var postUrl = '@Url.Action("MarkComplete", "QuanLyXNK", new { Area = "QuanLyXNK" })'
+                    var postUrl = '@Url.Action("MarkComplete", "QuanLyXNK", new { Area = "Owner" })'
                                 + '/' + requestId
                                 + '?targetMaKho=' + encodeURIComponent(selectedKho);
                     console.log("Generated POST URL:", postUrl);
@@ -561,6 +588,7 @@
                      $('#modal-request-id-hidden').val('');
                      $('#modal-request-id-display').text('[Mã YC]');
                      $('#targetKhoSelect').val('');
+                     $('.ai-kho-suggestion-hint').text('');
                      $('#khoSelectError').hide();
                 });
 

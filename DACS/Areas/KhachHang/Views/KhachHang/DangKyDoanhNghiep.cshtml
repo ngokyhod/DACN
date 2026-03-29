@@ -1,0 +1,508 @@
+﻿@model DACS.Models.ViewModels.DangKyDoanhNghiepViewModel
+@{
+    ViewData["Title"] = "Đăng ký Doanh nghiệp";
+}
+
+<div class="container mt-4 account-section">
+    <div class="row">
+        <!-- Cột Menu bên trái -->
+        <div class="col-lg-3 mb-4 mb-lg-0">
+            <div class="account-menu list-group">
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index" class="list-group-item list-group-item-action">
+                    <i class="fas fa-tachometer-alt fa-fw me-2"></i> Tổng quan
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan" class="list-group-item list-group-item-action">
+                    <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang" class="list-group-item list-group-item-action">
+                    <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="AIMatching" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "AIMatching" ? "active" : "")">
+                    <i class="fas fa-robot fa-fw me-2 text-success"></i> AI Matching
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuYeuCauThuGom" class="list-group-item list-group-item-action">
+                    <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="DangKyDoanhNghiep" class="list-group-item list-group-item-action active">
+                    <i class="fas fa-building fa-fw me-2"></i> Đăng ký doanh nghiệp
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia" class="list-group-item list-group-item-action">
+                    <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
+                </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia" class="list-group-item list-group-item-action">
+                    <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
+                </a>
+                <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword" class="list-group-item list-group-item-action">
+                    <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
+                </a>
+                <button type="submit" class="list-group-item list-group-item-action text-danger border-0 bg-transparent p-0 w-100 text-start">
+                    <a href="/home/index" class="list-group-item list-group-item-action border-0 text-danger"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
+                </button>
+            </div>
+        </div>
+
+        <!-- Cột Nội dung chính bên phải -->
+        <div class="col-lg-9">
+            <div class="account-content">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-success text-white">
+                        <h3 class="mb-0 fs-5"><i class="fa-solid fa-building me-2"></i>Đăng ký trở thành Doanh nghiệp</h3>
+                    </div>
+                    <div class="card-body p-4">
+                        @if ((ViewBag.EnterpriseReviewStatus as string) == "pending")
+                        {
+                            <div class="alert alert-warning border-warning">
+                                <i class="fa-solid fa-hourglass-half me-2"></i> Hồ sơ doanh nghiệp của bạn đã được gửi và hiện đang chờ quản trị viên xét duyệt.
+                            </div>
+                        }
+                        else if ((ViewBag.EnterpriseReviewStatus as string) == "approved")
+                        {
+                            <div class="alert alert-success border-success">
+                                <i class="fa-solid fa-circle-check me-2"></i> Hồ sơ doanh nghiệp của bạn đã được duyệt. Bạn có thể sử dụng AI Matching theo hồ sơ doanh nghiệp hiện tại.
+                            </div>
+                        }
+
+                        @if (TempData["ErrorMessage"] != null)
+                        {
+                            <div class="alert alert-danger">
+                                @TempData["ErrorMessage"]
+                            </div>
+                        }
+
+                        <div class="alert alert-info border-info text-info bg-light">
+                            <i class="fa-solid fa-info-circle me-2"></i> <strong>Lưu ý:</strong> Sau khi cập nhật thông tin, hồ sơ của bạn sẽ chuyển qua cho người quản trị xét duyệt. Khi được xét duyệt, bạn sẽ nhận được gợi ý nhu cầu mua hàng/phụ phẩm tự động từ AI!
+                        </div>
+
+                        <form asp-action="DangKyDoanhNghiep" method="post" enctype="multipart/form-data">
+                            <div asp-validation-summary="All" class="alert alert-danger mb-3"></div>
+                            <input asp-for="DiaChiDoanhNghiep" type="hidden" id="EnterpriseFullAddress" />
+                            <input asp-for="EnterpriseLat" type="hidden" id="EnterpriseLatInput" />
+                            <input asp-for="EnterpriseLng" type="hidden" id="EnterpriseLngInput" />
+
+                            <div class="form-group mb-3">
+                                <label asp-for="TenDoanhNghiep" class="form-label fw-bold"></label>
+                                <input asp-for="TenDoanhNghiep" class="form-control" placeholder="Ví dụ: Công ty TNHH MTV Phân bón xanh" />
+                                <span asp-validation-for="TenDoanhNghiep" class="text-danger small"></span>
+                            </div>
+
+                            <div class="card border-0 bg-light-subtle mb-4">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                        <div>
+                                            <h5 class="mb-1">Địa chỉ doanh nghiệp</h5>
+                                            <p class="text-muted mb-0">Chọn tỉnh, quận, phường, nhập số nhà rồi ghim vị trí trên bản đồ để AI Matching tính khoảng cách chính xác hơn.</p>
+                                        </div>
+                                        <span class="badge bg-success-subtle text-success-emphasis border">Địa chỉ chuẩn hoá</span>
+                                    </div>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label asp-for="MaTinhDoanhNghiep" class="form-label fw-bold"></label>
+                                            <select asp-for="MaTinhDoanhNghiep" id="enterpriseProvinceSelect" class="form-select">
+                                                <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                                                @if (ViewBag.Provinces != null)
+                                                {
+                                                    foreach (var province in ViewBag.Provinces)
+                                                    {
+                                                        <option value="@province.id">@province.name</option>
+                                                    }
+                                                }
+                                            </select>
+                                            <span asp-validation-for="MaTinhDoanhNghiep" class="text-danger small"></span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label asp-for="MaQuanDoanhNghiep" class="form-label fw-bold"></label>
+                                            <select asp-for="MaQuanDoanhNghiep" id="enterpriseDistrictSelect" class="form-select" disabled>
+                                                <option value="">-- Chọn Quận/Huyện --</option>
+                                            </select>
+                                            <span asp-validation-for="MaQuanDoanhNghiep" class="text-danger small"></span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label asp-for="MaXaDoanhNghiep" class="form-label fw-bold"></label>
+                                            <select asp-for="MaXaDoanhNghiep" id="enterpriseWardSelect" class="form-select" disabled>
+                                                <option value="">-- Chọn Xã/Phường --</option>
+                                            </select>
+                                            <span asp-validation-for="MaXaDoanhNghiep" class="text-danger small"></span>
+                                        </div>
+                                        <div class="col-12">
+                                            <label asp-for="DiaChiDuongDoanhNghiep" class="form-label fw-bold"></label>
+                                            <input asp-for="DiaChiDuongDoanhNghiep" id="enterpriseStreetInput" class="form-control" placeholder="Ví dụ: 15 Nguyễn Văn Linh, Ấp 2" />
+                                            <span asp-validation-for="DiaChiDuongDoanhNghiep" class="text-danger small"></span>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="border rounded overflow-hidden">
+                                                <div id="enterpriseMap" style="height: 320px;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="small text-muted">Địa chỉ đầy đủ: <span id="enterpriseAddressPreview">@(Model.DiaChiDoanhNghiep ?? "Chưa chọn địa chỉ")</span></div>
+                                            <div id="enterpriseAddressStatus" class="small text-muted mt-1">Chọn địa chỉ để định vị doanh nghiệp trên bản đồ.</div>
+                                        </div>
+                                        <div class="col-md-6 text-md-end">
+                                            <div class="small text-muted">Tọa độ doanh nghiệp</div>
+                                            <div id="enterpriseCoordDisplay" class="fw-semibold">@(Model.EnterpriseLat.HasValue && Model.EnterpriseLng.HasValue ? $"{Model.EnterpriseLat.Value:0.000000}, {Model.EnterpriseLng.Value:0.000000}" : "Chưa có tọa độ")</div>
+                                            <span asp-validation-for="EnterpriseLat" class="text-danger small d-block"></span>
+                                            <span asp-validation-for="EnterpriseLng" class="text-danger small d-block"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label asp-for="LinhVucHoatDong" class="form-label fw-bold"></label>
+                                <select asp-for="LinhVucHoatDong" class="form-select">
+                                    <option value="">-- Chọn Lĩnh vực --</option>
+                                    <option value="Sản xuất phân bón hữu cơ">Sản xuất phân bón hữu cơ</option>
+                                    <option value="Thức ăn chăn nuôi">Thức ăn chăn nuôi</option>
+                                    <option value="Năng lượng tái tạo (Biogas, Pelet)">Năng lượng tái tạo (Biogas, Pelet)</option>
+                                    <option value="Sản xuất vật liệu sinh học">Sản xuất vật liệu sinh học</option>
+                                    <option value="Thu gom, xử lý rác thải">Thu gom, xử lý rác thải</option>
+                                    <option value="Khác">Khác...</option>
+                                </select>
+                                <span asp-validation-for="LinhVucHoatDong" class="text-danger small"></span>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label asp-for="GiayPhepKinhDoanh" class="form-label fw-bold"></label>
+                                @if(!string.IsNullOrEmpty(Model.GiayPhepKinhDoanhUrl))
+                                {
+                                    <div class="mb-2">
+                                        <img src="@Model.GiayPhepKinhDoanhUrl" alt="Giấy phép" class="img-thumbnail" style="max-height: 150px;"/>
+                                        <p class="text-success small"><i class="fas fa-check-circle"></i> Đã tải lên giấy phép</p>
+                                    </div>
+                                }
+                                <input asp-for="GiayPhepKinhDoanh" class="form-control" type="file" accept="image/*" />
+                                <small class="text-muted">Tải lên hình ảnh Giấy phép kinh doanh (Mặt trước)</small>
+                                <span asp-validation-for="GiayPhepKinhDoanh" class="text-danger small"></span>
+                            </div>
+
+                            <div class="form-group mb-4">
+                                <label asp-for="NhuCauChinh" class="form-label fw-bold"></label>
+                                
+                                <!-- Hidden input để lưu trữ giá trị thực được kết nối với Model -->
+                                <input type="hidden" asp-for="NhuCauChinh" id="NhuCauChinhHidden" />
+                                
+                                <!-- Select2 thay thế cho Textarea -->
+                                <select class="form-control select2-nhucau" id="NhuCauChinhSelect" multiple="multiple">
+                                    @if (ViewBag.AvailableProducts != null)
+                                    {
+                                        foreach (var item in (List<string>)ViewBag.AvailableProducts)
+                                        {
+                                            <option value="@item">@item</option>
+                                        }
+                                    }
+                                </select>
+                                
+                                <small class="text-muted d-block mt-2">
+                                    <i class="fas fa-lightbulb text-warning"></i> <b>Gợi ý:</b> Hãy chọn các sản phẩm từ danh sách có sẵn hoặc gõ nhu cầu mới và nhấn <b>Enter</b> (VD: vỏ sầu riêng, rác chăn nuôi...).
+                                </small>
+                                
+                                <span asp-validation-for="NhuCauChinh" class="text-danger small"></span>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a asp-action="Index" class="btn btn-secondary me-md-2"><i class="fa-solid fa-arrow-left me-1"></i>Hủy</a>
+                                <button type="submit" class="btn btn-success"><i class="fa-solid fa-check me-1"></i>Xác nhận đăng ký</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            var $select = $('#NhuCauChinhSelect').select2({
+                tags: true,
+                tokenSeparators: [',', ';'],
+                placeholder: "Tìm sản phẩm hoặc gõ để thêm mới...",
+                allowClear: true,
+                width: '100%'
+            });
+
+            var initialValue = $('#NhuCauChinhHidden').val();
+            if (initialValue) {
+                var tags = initialValue.split(',').map(function(item) {
+                    return item.trim();
+                }).filter(function(item) { return item.length > 0; });
+
+                tags.forEach(function(tag) {
+                    if ($select.find("option[value='" + tag + "']").length === 0) {
+                        var newOption = new Option(tag, tag, true, true);
+                        $select.append(newOption);
+                    }
+                });
+                $select.val(tags).trigger('change');
+            }
+
+            $('form').on('submit', function() {
+                var selected = $select.val();
+                if (selected && selected.length > 0) {
+                    $('#NhuCauChinhHidden').val(selected.join(', '));
+                } else {
+                    $('#NhuCauChinhHidden').val('');
+                }
+            });
+            
+            $('.select2-container .select2-selection--multiple').css({
+                'min-height': '38px',
+                'border': '1px solid #ced4da',
+                'border-radius': '0.375rem'
+            });
+
+            const provinceSelect = $('#enterpriseProvinceSelect');
+            const districtSelect = $('#enterpriseDistrictSelect');
+            const wardSelect = $('#enterpriseWardSelect');
+            const streetInput = $('#enterpriseStreetInput');
+            const fullAddressInput = $('#EnterpriseFullAddress');
+            const latInput = $('#EnterpriseLatInput');
+            const lngInput = $('#EnterpriseLngInput');
+            const addressPreview = $('#enterpriseAddressPreview');
+            const addressStatus = $('#enterpriseAddressStatus');
+            const coordDisplay = $('#enterpriseCoordDisplay');
+            let enterpriseMap = null;
+            let enterpriseMarker = null;
+            let geocodeSequence = 0;
+            let houseSearchTimer = null;
+
+            function setAddressStatus(message, cssClass) {
+                addressStatus.removeClass('text-danger text-success text-muted').addClass(cssClass || 'text-muted').text(message || '');
+            }
+
+            function updateAddressPreview() {
+                const parts = [];
+                const street = (streetInput.val() || '').trim();
+                const ward = wardSelect.find(':selected').text();
+                const district = districtSelect.find(':selected').text();
+                const province = provinceSelect.find(':selected').text();
+
+                if (street) parts.push(street);
+                if (ward && !ward.startsWith('--')) parts.push(ward);
+                if (district && !district.startsWith('--')) parts.push(district);
+                if (province && !province.startsWith('--')) parts.push(province);
+
+                const fullAddress = parts.join(', ');
+                fullAddressInput.val(fullAddress);
+                addressPreview.text(fullAddress || 'Chưa chọn địa chỉ');
+                return fullAddress;
+            }
+
+            function updateMarker(lat, lng) {
+                if (!enterpriseMap) return;
+                if (enterpriseMarker) {
+                    enterpriseMap.removeLayer(enterpriseMarker);
+                }
+                enterpriseMarker = L.marker([lat, lng]).addTo(enterpriseMap);
+                latInput.val(lat.toFixed(6));
+                lngInput.val(lng.toFixed(6));
+                coordDisplay.text(lat.toFixed(6) + ', ' + lng.toFixed(6));
+            }
+
+            function getSelectedText(selectElement) {
+                const selectedOption = selectElement.find(':selected');
+                return selectedOption.length ? selectedOption.text().trim() : '';
+            }
+
+            function buildAdministrativeQuery(level) {
+                const province = getSelectedText(provinceSelect);
+                const district = getSelectedText(districtSelect);
+                const ward = getSelectedText(wardSelect);
+                const parts = [];
+
+                if (level === 'ward' && ward && !ward.startsWith('--')) {
+                    parts.push(ward);
+                }
+
+                if ((level === 'ward' || level === 'district') && district && !district.startsWith('--')) {
+                    parts.push(district);
+                }
+
+                if (province && !province.startsWith('--')) {
+                    parts.push(province);
+                }
+
+                parts.push('Viet Nam');
+                return parts.join(', ');
+            }
+
+            function buildFullStreetQuery() {
+                const street = (streetInput.val() || '').trim();
+                const ward = getSelectedText(wardSelect);
+                const district = getSelectedText(districtSelect);
+                const province = getSelectedText(provinceSelect);
+
+                if (!street || !ward || !district || !province || ward.startsWith('--') || district.startsWith('--') || province.startsWith('--')) {
+                    return '';
+                }
+
+                return [street, ward, district, province, 'Viet Nam'].join(', ');
+            }
+
+            function searchAddress(query, zoomLevel, successMessage, errorMessage) {
+                if (!query) return;
+                const currentSequence = ++geocodeSequence;
+                setAddressStatus('Đang định vị: ' + query, 'text-muted');
+
+                $.getJSON('https://nominatim.openstreetmap.org/search', {
+                    format: 'json',
+                    limit: 1,
+                    countrycodes: 'vn',
+                    q: query
+                }).done(function (data) {
+                    if (currentSequence !== geocodeSequence) return;
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        enterpriseMap.setView([lat, lng], zoomLevel || 16);
+                        updateMarker(lat, lng);
+                        setAddressStatus(successMessage || 'Đã định vị doanh nghiệp thành công.', 'text-success');
+                    } else if (errorMessage) {
+                        setAddressStatus(errorMessage, 'text-danger');
+                    }
+                }).fail(function () {
+                    if (currentSequence !== geocodeSequence) return;
+                    setAddressStatus(errorMessage || 'Không thể định vị địa chỉ doanh nghiệp.', 'text-danger');
+                });
+            }
+
+            function loadDistricts(provinceId, selectedDistrictId) {
+                districtSelect.html('<option value="">-- Chọn Quận/Huyện --</option>').prop('disabled', true);
+                wardSelect.html('<option value="">-- Chọn Xã/Phường --</option>').prop('disabled', true);
+
+                if (!provinceId) {
+                    updateAddressPreview();
+                    setAddressStatus('Hãy chọn tỉnh/thành phố để hệ thống định vị doanh nghiệp.', 'text-muted');
+                    return;
+                }
+
+                $.getJSON('@Url.Action("GetDistrictsForHome", "KhachHang", new { area = "KhachHang" })', { provinceId: provinceId })
+                    .done(function (data) {
+                        $.each(data, function (_, item) {
+                            districtSelect.append($('<option>', { value: item.id, text: item.name }));
+                        });
+                        districtSelect.prop('disabled', false);
+                        if (selectedDistrictId) {
+                            districtSelect.val(selectedDistrictId);
+                            loadWards(selectedDistrictId, wardSelect.data('selected'));
+                        }
+                    });
+            }
+
+            function loadWards(districtId, selectedWardId) {
+                wardSelect.html('<option value="">-- Chọn Xã/Phường --</option>').prop('disabled', true);
+                if (!districtId) {
+                    updateAddressPreview();
+                    setAddressStatus('Hãy chọn quận/huyện để tiếp tục định vị chính xác hơn.', 'text-muted');
+                    return;
+                }
+
+                $.getJSON('@Url.Action("GetWardsForHome", "KhachHang", new { area = "KhachHang" })', { districtId: districtId })
+                    .done(function (data) {
+                        $.each(data, function (_, item) {
+                            wardSelect.append($('<option>', { value: item.id, text: item.name }));
+                        });
+                        wardSelect.prop('disabled', false);
+                        if (selectedWardId) {
+                            wardSelect.val(selectedWardId);
+                        }
+                        updateAddressPreview();
+                    });
+            }
+
+            enterpriseMap = L.map('enterpriseMap').setView([10.7769, 106.7009], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(enterpriseMap);
+
+            window.setTimeout(function () {
+                enterpriseMap.invalidateSize();
+            }, 250);
+
+            enterpriseMap.on('click', function (event) {
+                updateMarker(event.latlng.lat, event.latlng.lng);
+                setAddressStatus('Đã ghim thủ công vị trí doanh nghiệp trên bản đồ.', 'text-success');
+            });
+
+            provinceSelect.on('change', function () {
+                loadDistricts($(this).val(), null);
+                searchAddress(
+                    buildAdministrativeQuery('province'),
+                    10,
+                    'Bản đồ đã chuyển tới tỉnh/thành phố doanh nghiệp.',
+                    'Không tìm thấy vị trí của tỉnh/thành phố này trên bản đồ.'
+                );
+            });
+
+            districtSelect.on('change', function () {
+                loadWards($(this).val(), null);
+                searchAddress(
+                    buildAdministrativeQuery('district'),
+                    12,
+                    'Bản đồ đã chuyển tới quận/huyện doanh nghiệp.',
+                    'Không tìm thấy vị trí của quận/huyện này trên bản đồ.'
+                );
+            });
+
+            wardSelect.on('change', function () {
+                updateAddressPreview();
+                searchAddress(
+                    buildAdministrativeQuery('ward'),
+                    14,
+                    'Bản đồ đã chuyển tới phường/xã doanh nghiệp.',
+                    'Không tìm thấy vị trí của phường/xã này trên bản đồ.'
+                );
+            });
+
+            streetInput.on('input', function () {
+                updateAddressPreview();
+                window.clearTimeout(houseSearchTimer);
+                houseSearchTimer = window.setTimeout(function () {
+                    const fullStreetQuery = buildFullStreetQuery();
+                    if (!fullStreetQuery) {
+                        if ((streetInput.val() || '').trim()) {
+                            setAddressStatus('Hãy chọn đủ tỉnh, quận/huyện, phường/xã trước khi định vị số nhà và tên đường.', 'text-muted');
+                        }
+                        return;
+                    }
+
+                    searchAddress(
+                        fullStreetQuery,
+                        17,
+                        'Đã định vị theo số nhà và tên đường doanh nghiệp.',
+                        'Không định vị chính xác được số nhà/tên đường. Bạn có thể ghim trực tiếp trên bản đồ để chỉnh chuẩn hơn.'
+                    );
+                }, 500);
+            });
+
+            districtSelect.data('selected', '@Model.MaQuanDoanhNghiep');
+            wardSelect.data('selected', '@Model.MaXaDoanhNghiep');
+
+            if (provinceSelect.val()) {
+                loadDistricts(provinceSelect.val(), '@Model.MaQuanDoanhNghiep');
+            }
+
+            if (latInput.val() && lngInput.val()) {
+                const lat = parseFloat(latInput.val());
+                const lng = parseFloat(lngInput.val());
+                if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                    enterpriseMap.setView([lat, lng], 16);
+                    updateMarker(lat, lng);
+                    setAddressStatus('Đã nạp vị trí doanh nghiệp đã lưu.', 'text-success');
+                }
+            } else {
+                updateAddressPreview();
+                setAddressStatus('Chọn tỉnh, quận, phường hoặc nhập số nhà để bản đồ tự phóng tới khu vực doanh nghiệp.', 'text-muted');
+            }
+        });
+    </script>
+}

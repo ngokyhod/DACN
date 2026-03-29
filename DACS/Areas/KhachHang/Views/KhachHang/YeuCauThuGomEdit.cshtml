@@ -16,6 +16,9 @@
                 <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan" class="list-group-item list-group-item-action">
                     <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
                 </a>
+                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="DangKyDoanhNghiep" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "DangKyDoanhNghiep" ? "active" : "")">
+                    <i class="fas fa-building fa-fw me-2"></i> Đăng ký Doanh nghiệp
+                </a>
                 <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang" class="list-group-item list-group-item-action">
                     <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
                 </a>
@@ -103,6 +106,15 @@
                                             <input asp-for="SupplierStreet" class="form-control" placeholder="Số nhà, Tên đường, Ấp, Thôn...">
                                             <span asp-validation-for="SupplierStreet" class="text-danger field-validation-error"></span>
                                         </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div id="pickupMapEdit" style="height: 320px; width: 100%; border: 1px solid #ced4da; border-radius: 0.25rem; margin-bottom: 10px;"></div>
+                                        <div id="pickupAddressStatusEdit" class="form-text mb-2 text-muted"></div>
+                                        <input type="hidden" asp-for="Lat" id="PickupLatEdit" />
+                                        <input type="hidden" asp-for="Lng" id="PickupLngEdit" />
+                                        <small class="text-muted">Tọa độ hiện tại: <span id="pickupCoordDisplayEdit">Chưa có</span></small>
+                                        <span asp-validation-for="Lat" class="text-danger d-block"></span>
+                                        <span asp-validation-for="Lng" class="text-danger d-block"></span>
                                     </div>
 
                                     <hr>
@@ -215,133 +227,186 @@
 @* --- SCRIPTS --- *@
 @section Scripts {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     @* Đảm bảo chỉ include jQuery một lần - nếu Layout đã có thì không cần ở đây *@
     @await Html.PartialAsync("_ValidationScriptsPartial") @* Script validation *@
 
-    @* Script AJAX cho dropdown địa chỉ - Dùng lại script giống ThuGom.cshtml nhưng đổi ID nếu cần *@
     <script>
         $(document).ready(function () {
-            console.log("YeuCauThuGomEdit AJAX script initializing...");
-
-            // *** Đặt ID khác với form Tạo mới để tránh xung đột nếu cần ***
-            // Ví dụ: provinceSelectEdit, districtSelectEdit, wardSelectEdit
             const provinceSelect = $('#provinceSelectEdit');
             const districtSelect = $('#districtSelectEdit');
             const wardSelect = $('#wardSelectEdit');
+            const streetInput = $('#SupplierStreet');
+            const latInput = $('#PickupLatEdit');
+            const lngInput = $('#PickupLngEdit');
+            const coordDisplay = $('#pickupCoordDisplayEdit');
+            const addressStatus = $('#pickupAddressStatusEdit');
+            let pickupMap = null;
+            let pickupMarker = null;
+            let geocodeSequence = 0;
+            let houseSearchTimer = null;
 
-            // ... (Phần còn lại của script AJAX giống hệt ThuGom.cshtml) ...
-            // ... Bao gồm hàm resetDropdown, enableDropdown ...
-            // ... Bao gồm xử lý sự kiện change cho provinceSelect và districtSelect ...
-            // Quan trọng: URL gọi AJAX cần trỏ đúng đến Action JSON trong Controller phù hợp
-            // Ví dụ: const url = '@Url.Action("GetDistrictsForHome", "Home")' + ...
-            // Hoặc nếu bạn tạo Action JSON trong KhachHangController:
-            // const url = '@Url.Action("GetDistrictsJson", "KhachHang", new { area = "KhachHang" })' + ...
-
-            // --- Phần kích hoạt tải dữ liệu ban đầu cho dropdown phụ thuộc ---
-            // Hàm này sẽ tải Quận/Huyện nếu Tỉnh đã được chọn sẵn khi trang load
-            function loadInitialDistricts() {
-                const selectedProvinceId = provinceSelect.val();
-                console.log("Initial province:", selectedProvinceId);
-                resetDropdown(wardSelect, '-- Chọn Xã/Phường --'); // Reset xã trước
-
-                if (selectedProvinceId) {
-                    resetDropdown(districtSelect, '-- Đang tải Quận/Huyện... --');
-                    const url = '@Url.Action("GetDistrictsForHome", "Home")' + '?provinceId=' + selectedProvinceId; // <<< Sửa lại URL nếu cần
-                    console.log("Requesting Initial Districts URL:", url);
-                    $.getJSON(url)
-                        .done(function (districts) {
-                            console.log("Initial Districts received:", districts);
-                             if (districts && !districts.error && districts.length > 0) {
-                                enableDropdown(districtSelect);
-                                districtSelect.find('option:first').text('-- Chọn Quận/Huyện --');
-                                var currentDistrict = '@Model.SupplierDistrict'; // Lấy giá trị hiện tại từ Model
-                                $.each(districts, function (index, district) {
-                                    var option = $('<option>', { value: district.id, text: district.name });
-                                    if(district.id === currentDistrict) {
-                                        option.prop('selected', true); // Chọn sẵn giá trị hiện tại
-                                    }
-                                    districtSelect.append(option);
-                                });
-                                // Kích hoạt sự kiện change để tải xã/phường nếu quận/huyện đã được chọn sẵn
-                                if (currentDistrict) {
-                                   districtSelect.trigger('change');
-                                }
-                            } else if (districts.error) {
-                                console.error("Server error initial districts:", districts.error);
-                                resetDropdown(districtSelect, districts.error);
-                            } else {
-                                 resetDropdown(districtSelect, '-- Không có Quận/Huyện --');
-                            }
-                        })
-                        .fail(function (jqXHR, textStatus, errorThrown) {
-                            console.error("AJAX Error initial districts:", textStatus, errorThrown);
-                            resetDropdown(districtSelect, 'Lỗi tải Quận/Huyện');
-                        });
-                } else {
-                     resetDropdown(districtSelect, '-- Chọn Quận/Huyện --');
-                     resetDropdown(wardSelect, '-- Chọn Xã/Phường --');
-                }
+            function resetDropdown(dropdown, defaultText) {
+                dropdown.empty().append($('<option>', { value: '', text: defaultText })).prop('disabled', true).val('');
             }
 
-            // Hàm này sẽ tải Xã/Phường nếu Quận/Huyện đã được chọn sẵn khi trang load (hoặc sau khi chọn Tỉnh)
-            function loadInitialWards() {
-                const selectedDistrictId = districtSelect.val(); // Lấy giá trị quận đang được chọn
-                console.log("Initial district:", selectedDistrictId);
-
-                if (selectedDistrictId) {
-                    resetDropdown(wardSelect, '-- Đang tải Xã/Phường... --');
-                     const url = '@Url.Action("GetWardsForHome", "Home")' + '?districtId=' + selectedDistrictId; // <<< Sửa lại URL nếu cần
-                     console.log("Requesting Initial Wards URL:", url);
-                    $.getJSON(url)
-                        .done(function (wards) {
-                             console.log("Initial Wards received:", wards);
-                            if (wards && !wards.error && wards.length > 0) {
-                                enableDropdown(wardSelect);
-                                wardSelect.find('option:first').text('-- Chọn Xã/Phường --');
-                                var currentWard = '@Model.SupplierWard'; // Lấy giá trị hiện tại từ Model
-                                $.each(wards, function (index, ward) {
-                                    var option = $('<option>', { value: ward.id, text: ward.name });
-                                     if(ward.id === currentWard) {
-                                        option.prop('selected', true); // Chọn sẵn giá trị hiện tại
-                                    }
-                                    wardSelect.append(option);
-                                });
-                            } else if (wards.error) {
-                                console.error("Server error initial wards:", wards.error);
-                                resetDropdown(wardSelect, wards.error);
-                            } else {
-                                resetDropdown(wardSelect, '-- Không có Xã/Phường --');
-                            }
-                        })
-                        .fail(function (jqXHR, textStatus, errorThrown) {
-                            console.error("AJAX Error initial wards:", textStatus, errorThrown);
-                            resetDropdown(wardSelect, 'Lỗi tải Xã/Phường');
-                        });
-                } else {
-                    resetDropdown(wardSelect, '-- Chọn Xã/Phường --');
-                }
+            function enableDropdown(dropdown) {
+                dropdown.prop('disabled', false);
             }
 
-            // Gắn sự kiện change như cũ
+            function setAddressStatus(message, cssClass) {
+                addressStatus.removeClass('text-danger text-success text-muted').addClass(cssClass || 'text-muted').text(message || '');
+            }
+
+            function formatCoordinateInput(value) {
+                return Number.isFinite(value) ? value.toFixed(6).replace('.', ',') : '';
+            }
+
+            function updateMarker(lat, lng) {
+                if (!pickupMap) {
+                    return;
+                }
+
+                if (pickupMarker) {
+                    pickupMap.removeLayer(pickupMarker);
+                }
+
+                pickupMarker = L.marker([lat, lng]).addTo(pickupMap);
+                latInput.val(formatCoordinateInput(lat));
+                lngInput.val(formatCoordinateInput(lng));
+                coordDisplay.text(lat.toFixed(6) + ', ' + lng.toFixed(6));
+            }
+
+            function getSelectedText(selectElement) {
+                const selectedOption = selectElement.find(':selected');
+                return selectedOption.length ? selectedOption.text().trim() : '';
+            }
+
+            function buildAdministrativeQuery(level) {
+                const province = getSelectedText(provinceSelect);
+                const district = getSelectedText(districtSelect);
+                const ward = getSelectedText(wardSelect);
+                const parts = [];
+
+                if (level === 'ward' && ward && !ward.startsWith('--')) {
+                    parts.push(ward);
+                }
+
+                if ((level === 'ward' || level === 'district') && district && !district.startsWith('--')) {
+                    parts.push(district);
+                }
+
+                if (province && !province.startsWith('--')) {
+                    parts.push(province);
+                }
+
+                parts.push('Viet Nam');
+                return parts.join(', ');
+            }
+
+            function buildFullStreetQuery() {
+                const street = streetInput.val().trim();
+                const ward = getSelectedText(wardSelect);
+                const district = getSelectedText(districtSelect);
+                const province = getSelectedText(provinceSelect);
+
+                if (!street || !ward || !district || !province || ward.startsWith('--') || district.startsWith('--') || province.startsWith('--')) {
+                    return '';
+                }
+
+                return [street, ward, district, province, 'Viet Nam'].join(', ');
+            }
+
+            function searchMapAddress(query, zoomLevel, successMessage, errorMessage) {
+                if (!query || !pickupMap) {
+                    return;
+                }
+
+                const currentSequence = ++geocodeSequence;
+                setAddressStatus('Đang định vị: ' + query, 'text-muted');
+
+                $.getJSON('https://nominatim.openstreetmap.org/search', {
+                    format: 'json',
+                    limit: 1,
+                    countrycodes: 'vn',
+                    q: query
+                }).done(function (data) {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        pickupMap.setView([lat, lng], zoomLevel || 15);
+                        updateMarker(lat, lng);
+                        setAddressStatus(successMessage, 'text-success');
+                    } else if (errorMessage) {
+                        setAddressStatus(errorMessage, 'text-danger');
+                    }
+                }).fail(function () {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+                    setAddressStatus(errorMessage || 'Không tìm thấy địa chỉ trên bản đồ.', 'text-danger');
+                });
+            }
+
+            function initPickupMap() {
+                const latValue = parseFloat((latInput.val() || '').toString().replace(',', '.'));
+                const lngValue = parseFloat((lngInput.val() || '').toString().replace(',', '.'));
+                const lat = Number.isFinite(latValue) ? latValue : 10.762622;
+                const lng = Number.isFinite(lngValue) ? lngValue : 106.660172;
+
+                pickupMap = L.map('pickupMapEdit').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(pickupMap);
+
+                if (Number.isFinite(latValue) && Number.isFinite(lngValue)) {
+                    updateMarker(latValue, lngValue);
+                } else {
+                    coordDisplay.text('Chưa có');
+                }
+
+                pickupMap.on('click', function (event) {
+                    updateMarker(event.latlng.lat, event.latlng.lng);
+                    setAddressStatus('Đã ghim vị trí thủ công cho địa chỉ thu gom.', 'text-success');
+                });
+
+                window.setTimeout(function () {
+                    pickupMap.invalidateSize();
+                }, 250);
+            }
+
             provinceSelect.on('change', function () {
                const selectedProvinceId = $(this).val();
                resetDropdown(districtSelect, '-- Đang tải Quận/Huyện... --');
                resetDropdown(wardSelect, '-- Chọn Xã/Phường --');
                if (selectedProvinceId) {
-                    const url = '@Url.Action("GetDistrictsForHome", "Home")' + '?provinceId=' + selectedProvinceId; // <<< Sửa lại URL nếu cần
+                    districtSelect.prop('disabled', true);
+                    const url = '@Url.Action("GetDistrictsForHome", "KhachHang", new { area = "KhachHang" })' + '?provinceId=' + selectedProvinceId;
                     $.getJSON(url)
                         .done(function (districts) {
-                             if (districts && !districts.error && districts.length > 0) {
+                             if (districts && districts.length > 0) {
                                 enableDropdown(districtSelect);
                                 districtSelect.find('option:first').text('-- Chọn Quận/Huyện --');
                                 $.each(districts, function (index, district) {
                                     districtSelect.append($('<option>', { value: district.id, text: district.name }));
                                 });
-                                // KHÔNG trigger change ở đây nữa, để người dùng tự chọn
-                            } else if (districts.error) { districtSelect.find('option:first').text(districts.error); }
+                            }
                              else { resetDropdown(districtSelect, '-- Không có Quận/Huyện --'); }
                         })
                         .fail(function () { resetDropdown(districtSelect, 'Lỗi tải Quận/Huyện'); });
+
+                    searchMapAddress(
+                        buildAdministrativeQuery('province'),
+                        10,
+                        'Bản đồ đã chuyển tới tỉnh/thành phố đã chọn.',
+                        'Không tìm thấy vị trí của tỉnh/thành phố này trên bản đồ.'
+                    );
                } else { resetDropdown(districtSelect, '-- Chọn Quận/Huyện --'); resetDropdown(wardSelect, '-- Chọn Xã/Phường --'); }
             });
 
@@ -349,34 +414,77 @@
                 const selectedDistrictId = $(this).val();
                 resetDropdown(wardSelect, '-- Đang tải Xã/Phường... --');
                 if (selectedDistrictId) {
-                     const url = '@Url.Action("GetWardsForHome", "Home")' + '?districtId=' + selectedDistrictId; // <<< Sửa lại URL nếu cần
+                     const url = '@Url.Action("GetWardsForHome", "KhachHang", new { area = "KhachHang" })' + '?districtId=' + selectedDistrictId;
                      $.getJSON(url)
                         .done(function (wards) {
-                             if (wards && !wards.error && wards.length > 0) {
+                             if (wards && wards.length > 0) {
                                 enableDropdown(wardSelect);
                                 wardSelect.find('option:first').text('-- Chọn Xã/Phường --');
                                 $.each(wards, function (index, ward) {
                                     wardSelect.append($('<option>', { value: ward.id, text: ward.name }));
                                 });
-                            } else if(wards.error){ wardSelect.find('option:first').text(wards.error); }
+                            }
                              else { resetDropdown(wardSelect, '-- Không có Xã/Phường --'); }
                         })
                         .fail(function () { resetDropdown(wardSelect, 'Lỗi tải Xã/Phường'); });
+
+                    searchMapAddress(
+                        buildAdministrativeQuery('district'),
+                        12,
+                        'Bản đồ đã chuyển tới quận/huyện đã chọn.',
+                        'Không tìm thấy vị trí của quận/huyện này trên bản đồ.'
+                    );
                 } else { resetDropdown(wardSelect, '-- Chọn Xã/Phường --'); }
             });
 
+            wardSelect.on('change', function () {
+                searchMapAddress(
+                    buildAdministrativeQuery('ward'),
+                    14,
+                    'Bản đồ đã chuyển tới phường/xã đã chọn.',
+                    'Không tìm thấy vị trí của phường/xã này trên bản đồ.'
+                );
+            });
 
-            // Gọi hàm tải ban đầu nếu Tỉnh đã có giá trị
-            if (provinceSelect.val()) {
-                loadInitialDistricts(); // Tải Quận/Huyện ban đầu
-                // Hàm loadInitialDistricts sẽ tự trigger change nếu có Quận/Huyện được chọn sẵn -> tải Xã/Phường
+            streetInput.on('input', function () {
+                if (houseSearchTimer) {
+                    clearTimeout(houseSearchTimer);
+                }
+
+                const fullStreetQuery = buildFullStreetQuery();
+                if (!fullStreetQuery) {
+                    if (streetInput.val().trim()) {
+                        setAddressStatus('Hãy chọn đủ tỉnh, quận/huyện, phường/xã trước khi định vị số nhà và tên đường.', 'text-muted');
+                    }
+                    return;
+                }
+
+                houseSearchTimer = setTimeout(function () {
+                    searchMapAddress(
+                        fullStreetQuery,
+                        17,
+                        'Đã định vị theo số nhà và tên đường.',
+                        'Không định vị chính xác được số nhà/tên đường. Bạn có thể ghim trực tiếp trên bản đồ để chỉnh chuẩn hơn.'
+                    );
+                }, 700);
+            });
+
+            initPickupMap();
+
+            if (!provinceSelect.val()) {
+                districtSelect.prop('disabled', true);
+                wardSelect.prop('disabled', true);
             } else {
-               // Vẫn disable nếu ban đầu chưa chọn Tỉnh
-               districtSelect.prop('disabled', true);
-               wardSelect.prop('disabled', true);
+                const initialQuery = buildFullStreetQuery() || buildAdministrativeQuery('ward');
+                if (initialQuery) {
+                    searchMapAddress(
+                        initialQuery,
+                        buildFullStreetQuery() ? 17 : 14,
+                        'Đã đồng bộ vị trí hiện tại với địa chỉ thu gom.',
+                        'Không thể đồng bộ vị trí hiện tại trên bản đồ. Bạn có thể ghim tay.'
+                    );
+                }
             }
-
-            console.log("YeuCauThuGomEdit AJAX script initialization complete.");
         });
     </script>
 }

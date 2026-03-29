@@ -46,6 +46,7 @@ namespace DACS.Models // Hoặc namespace phù hợp
         public const string ConTrong = "Còn trống";
         public const string GanDay = "Gần đầy";
         public const string BaoTri = "Bảo trì";
+        public const string NgungSuDung = "Ngưng sử dụng";
         // Thêm các trạng thái khác nếu có
     }
 }

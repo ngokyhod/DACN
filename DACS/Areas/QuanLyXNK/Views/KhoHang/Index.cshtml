@@ -186,6 +186,12 @@
                     <div class="label">Đang bảo trì</div>
                 </div>
             </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card">
+                    <div class="value text-secondary">@(Model.Statistics?.NgungSuDung ?? 0)</div>
+                    <div class="label">Ngưng sử dụng</div>
+                </div>
+            </div>
         </div>
 
         @* --- FILTER FORM (Sử dụng Tag Helper) --- *@
@@ -244,6 +250,12 @@
                                         @* Liên kết đến action Details và Edit *@
                                         <a asp-action="Details" asp-route-id="@item.MaKho" class="btn btn-sm btn-outline-info" title="Xem chi tiết"><i class="fas fa-eye"></i></a>
                                         <a asp-action="Edit" asp-route-id="@item.MaKho" class="btn btn-sm btn-outline-warning" title="Chỉnh sửa"><i class="fas fa-edit"></i></a>
+                                        <form asp-action="ToggleUsage" asp-route-id="@item.MaKho" method="post" style="display: inline;" onsubmit="return confirm('@(item.TrangThai == KhoHangTrangThai.NgungSuDung ? "Kích hoạt lại kho hàng này?" : "Chuyển kho hàng này sang ngưng sử dụng?")');">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm @(item.TrangThai == KhoHangTrangThai.NgungSuDung ? "btn-outline-success" : "btn-outline-secondary")" title="@(item.TrangThai == KhoHangTrangThai.NgungSuDung ? "Kích hoạt lại" : "Ngưng sử dụng")">
+                                                <i class="fas @(item.TrangThai == KhoHangTrangThai.NgungSuDung ? "fa-rotate-left" : "fa-ban")"></i>
+                                            </button>
+                                        </form>
                                         @* Nút xóa cần form POST *@
                                         <form asp-action="Delete" asp-route-id="@item.MaKho" method="post" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa kho hàng này?');">
                                             @Html.AntiForgeryToken() @* Thêm token chống CSRF *@
@@ -304,9 +316,10 @@
         status = status?.ToLower() ?? "";
         switch (status)
         {
-            case KhoHangTrangThai.ConTrong: return "bg-success";
-            case KhoHangTrangThai.GanDay: return "bg-warning text-dark";
-            case KhoHangTrangThai.BaoTri: return "bg-danger";
+            case "còn trống": return "bg-success";
+            case "gần đầy": return "bg-warning text-dark";
+            case "bảo trì": return "bg-danger";
+            case "ngưng sử dụng": return "bg-secondary";
             default: return "bg-secondary";
         }
     }

@@ -62,9 +62,9 @@
                             @* Hiển thị lỗi validation cho MaKho *@
                             <span asp-validation-for="MaKho" class="text-danger d-block mt-1"></span>
                             @* Hiển thị lỗi "Mã kho đã tồn tại" nếu Controller thêm vào ModelState *@
-                            @if (ViewData.ModelState["MaKho"] != null && ViewData.ModelState["MaKho"].Errors.Any(e => e.ErrorMessage.Contains("đã tồn tại")))
+                            @if (ViewData.ModelState.TryGetValue("MaKho", out var maKhoEntry) && maKhoEntry.Errors.Any(e => e.ErrorMessage.Contains("đã tồn tại")))
                             {
-                                <span class="text-danger d-block mt-1">@ViewData.ModelState["MaKho"].Errors.First(e => e.ErrorMessage.Contains("đã tồn tại")).ErrorMessage</span>
+                                <span class="text-danger d-block mt-1">@maKhoEntry.Errors.First(e => e.ErrorMessage.Contains("đã tồn tại")).ErrorMessage</span>
                             }
                         </div>
 
@@ -74,10 +74,41 @@
                             <span asp-validation-for="TenKho" class="text-danger d-block mt-1"></span>
                         </div>
 
+                        <input asp-for="TenLoaiKho" type="hidden" value="@(string.IsNullOrWhiteSpace(Model.TenLoaiKho) ? "Kho hàng" : Model.TenLoaiKho)" />
+
                         <div class="mb-3">
-                            <label asp-for="DiaChi" class="form-label fw-semibold"></label>
-                            <textarea asp-for="DiaChi" class="form-control form-control-sm" rows="3"></textarea>
+                            <label asp-for="DiaChi" class="form-label fw-semibold">Địa chỉ Kho Hàng (Phân cấp) *</label>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <select id="tinhSelect" class="form-select form-select-sm">
+                                        <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select id="huyenSelect" class="form-select form-select-sm" disabled>
+                                        <option value="">-- Chọn Quận/Huyện --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select id="xaSelect" class="form-select form-select-sm" disabled>
+                                        <option value="">-- Chọn Phường/Xã --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <input type="text" id="soNhaInput" class="form-control form-control-sm" placeholder="Nhập số nhà, tên đường..." />
+                            </div>
+                            <div id="addressStatus" class="form-text mb-2"></div>
+                            <label class="form-label fw-semibold mt-2">Ghim Vị Trí Kho Hàng Trên Bản Đồ</label>
+                            <div id="warehouseMap" style="height: 350px; width: 100%; border: 1px solid #ced4da; border-radius: 0.25rem; margin-bottom: 10px;"></div>
+                            <textarea asp-for="DiaChi" id="DiaChi" class="form-control form-control-sm d-none" rows="2"></textarea>
                             <span asp-validation-for="DiaChi" class="text-danger d-block mt-1"></span>
+                            <input type="hidden" asp-for="Lat" id="Lat" />
+                            <input type="hidden" asp-for="Lng" id="Lng" />
+                            <small class="text-muted">Tọa độ hiện tại: <span id="coordDisplay">Chưa có</span></small>
+                            <span id="diachiTextInfo" class="text-primary fw-bold ms-2"></span>
+                            <span asp-validation-for="Lat" class="text-danger d-block"></span>
+                            <span asp-validation-for="Lng" class="text-danger d-block"></span>
                         </div>
 
                         <div class="mb-3">
@@ -117,11 +148,357 @@
 
 @section Scripts {
     @{
-        // Thêm partial view chứa script cho validation phía client (nếu bạn có file _ValidationScriptsPartial.cshtml)
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script>
-        // Thêm các script tùy chỉnh khác nếu cần cho trang này
-        // Ví dụ: $(document).ready(function() { ... });
+        $(function () {
+            const provinces = [
+                { id: "01", name: "Hà Nội" },
+                { id: "79", name: "Hồ Chí Minh" },
+                { id: "31", name: "Hải Phòng" },
+                { id: "48", name: "Đà Nẵng" },
+                { id: "92", name: "Cần Thơ" },
+                { id: "02", name: "Hà Giang" },
+                { id: "04", name: "Cao Bằng" },
+                { id: "06", name: "Bắc Kạn" },
+                { id: "08", name: "Tuyên Quang" },
+                { id: "10", name: "Lào Cai" },
+                { id: "11", name: "Điện Biên" },
+                { id: "12", name: "Lai Châu" },
+                { id: "14", name: "Sơn La" },
+                { id: "15", name: "Yên Bái" },
+                { id: "17", name: "Hòa Bình" },
+                { id: "19", name: "Thái Nguyên" },
+                { id: "20", name: "Lạng Sơn" },
+                { id: "22", name: "Quảng Ninh" },
+                { id: "24", name: "Bắc Giang" },
+                { id: "25", name: "Phú Thọ" },
+                { id: "26", name: "Vĩnh Phúc" },
+                { id: "27", name: "Bắc Ninh" },
+                { id: "30", name: "Hải Dương" },
+                { id: "33", name: "Hưng Yên" },
+                { id: "34", name: "Thái Bình" },
+                { id: "35", name: "Hà Nam" },
+                { id: "36", name: "Nam Định" },
+                { id: "37", name: "Ninh Bình" },
+                { id: "38", name: "Thanh Hóa" },
+                { id: "40", name: "Nghệ An" },
+                { id: "42", name: "Hà Tĩnh" },
+                { id: "44", name: "Quảng Bình" },
+                { id: "45", name: "Quảng Trị" },
+                { id: "46", name: "Thừa Thiên Huế" },
+                { id: "49", name: "Quảng Nam" },
+                { id: "51", name: "Quảng Ngãi" },
+                { id: "52", name: "Bình Định" },
+                { id: "54", name: "Phú Yên" },
+                { id: "56", name: "Khánh Hòa" },
+                { id: "58", name: "Ninh Thuận" },
+                { id: "60", name: "Bình Thuận" },
+                { id: "62", name: "Kon Tum" },
+                { id: "64", name: "Gia Lai" },
+                { id: "66", name: "Đắk Lắk" },
+                { id: "67", name: "Đắk Nông" },
+                { id: "68", name: "Lâm Đồng" },
+                { id: "70", name: "Bình Phước" },
+                { id: "72", name: "Tây Ninh" },
+                { id: "74", name: "Bình Dương" },
+                { id: "75", name: "Đồng Nai" },
+                { id: "77", name: "Bà Rịa - Vũng Tàu" },
+                { id: "80", name: "Long An" },
+                { id: "82", name: "Tiền Giang" },
+                { id: "83", name: "Bến Tre" },
+                { id: "84", name: "Trà Vinh" },
+                { id: "86", name: "Vĩnh Long" },
+                { id: "87", name: "Đồng Tháp" },
+                { id: "89", name: "An Giang" },
+                { id: "91", name: "Kiên Giang" },
+                { id: "93", name: "Hậu Giang" },
+                { id: "94", name: "Sóc Trăng" },
+                { id: "95", name: "Bạc Liêu" },
+                { id: "96", name: "Cà Mau" }
+            ];
+
+            const $tinh = $("#tinhSelect");
+            const $huyen = $("#huyenSelect");
+            const $xa = $("#xaSelect");
+            const $soNha = $("#soNhaInput");
+            const $diaChi = $("#DiaChi");
+            const $status = $("#addressStatus");
+            const $coordDisplay = $("#coordDisplay");
+            const $diaChiInfo = $("#diachiTextInfo");
+            let map = null;
+            let marker = null;
+            let geocodeSequence = 0;
+            let houseSearchTimer = null;
+
+            function setStatus(message, cssClass) {
+                $status.removeClass("text-danger text-success text-muted").addClass(cssClass || "text-muted").text(message || "");
+            }
+
+            function populateProvinces() {
+                provinces.forEach(function (province) {
+                    $tinh.append('<option value="' + province.id + '" data-name="' + province.name + '">' + province.name + '</option>');
+                });
+                setStatus("Đã nạp danh sách tỉnh/thành phố.", "text-success");
+            }
+
+            function updateFullAddress() {
+                const parts = [];
+                const soNha = $soNha.val().trim();
+                const xa = $xa.find(":selected").data("name") || "";
+                const huyen = $huyen.find(":selected").data("name") || "";
+                const tinh = $tinh.find(":selected").data("name") || "";
+
+                if (soNha) parts.push(soNha);
+                if (xa) parts.push(xa);
+                if (huyen) parts.push(huyen);
+                if (tinh) parts.push(tinh);
+
+                const fullAddress = parts.join(", ");
+                $diaChi.val(fullAddress);
+                $diaChiInfo.text(fullAddress ? " - " + fullAddress : "");
+                return fullAddress;
+            }
+
+            function updateMarker(lat, lng) {
+                if (!map) {
+                    return;
+                }
+
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+
+                marker = L.marker([lat, lng]).addTo(map);
+                $("#Lat").val(lat.toFixed(6).replace(".", ","));
+                $("#Lng").val(lng.toFixed(6).replace(".", ","));
+                $coordDisplay.text(lat.toFixed(6) + ", " + lng.toFixed(6));
+            }
+
+            function getSelectedNames() {
+                return {
+                    tinh: $tinh.find(":selected").data("name") || "",
+                    huyen: $huyen.find(":selected").data("name") || "",
+                    xa: $xa.find(":selected").data("name") || "",
+                    soNha: ($soNha.val() || "").trim()
+                };
+            }
+
+            function buildAdministrativeQuery(level) {
+                const selected = getSelectedNames();
+                const parts = [];
+
+                if (level === "ward" && selected.xa) {
+                    parts.push(selected.xa);
+                }
+
+                if ((level === "ward" || level === "district") && selected.huyen) {
+                    parts.push(selected.huyen);
+                }
+
+                if (selected.tinh) {
+                    parts.push(selected.tinh);
+                }
+
+                parts.push("Viet Nam");
+                return parts.join(", ");
+            }
+
+            function buildFullStreetQuery() {
+                const selected = getSelectedNames();
+                if (!selected.xa || !selected.huyen || !selected.tinh || !selected.soNha) {
+                    return "";
+                }
+
+                return [selected.soNha, selected.xa, selected.huyen, selected.tinh, "Viet Nam"].join(", ");
+            }
+
+            function searchMapAddress(query, zoomLevel, successMessage, errorMessage) {
+                if (!query || !map) {
+                    return;
+                }
+
+                const currentSequence = ++geocodeSequence;
+                setStatus(successMessage ? ("Đang định vị: " + query) : "Đang định vị trên bản đồ...", "text-muted");
+
+                $.getJSON("https://nominatim.openstreetmap.org/search", {
+                    format: "json",
+                    limit: 1,
+                    countrycodes: "vn",
+                    q: query
+                }).done(function (data) {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        map.setView([lat, lng], zoomLevel || 15);
+                        updateMarker(lat, lng);
+                        if (successMessage) {
+                            setStatus(successMessage, "text-success");
+                        }
+                    } else if (errorMessage) {
+                        setStatus(errorMessage, "text-danger");
+                    }
+                }).fail(function () {
+                    if (currentSequence !== geocodeSequence) {
+                        return;
+                    }
+
+                    if (errorMessage) {
+                        setStatus(errorMessage, "text-danger");
+                    }
+                });
+            }
+
+            function loadDistricts(provinceId) {
+                $huyen.html('<option value="">-- Chọn Quận/Huyện --</option>').prop("disabled", true);
+                $xa.html('<option value="">-- Chọn Phường/Xã --</option>').prop("disabled", true);
+
+                if (!provinceId) {
+                    updateFullAddress();
+                    return;
+                }
+
+                setStatus("Đang tải quận/huyện...", "text-muted");
+                $.getJSON("https://esgoo.net/api-tinhthanh/2/" + provinceId + ".htm")
+                    .done(function (data) {
+                        if (data && data.error === 0) {
+                            $.each(data.data, function (_, item) {
+                                $huyen.append('<option value="' + item.id + '" data-name="' + item.full_name + '">' + item.full_name + '</option>');
+                            });
+                            $huyen.prop("disabled", false);
+                            setStatus("Đã nạp quận/huyện.", "text-success");
+                        } else {
+                            setStatus("Không tải được quận/huyện.", "text-danger");
+                        }
+                    })
+                    .fail(function () {
+                        setStatus("Lỗi kết nối khi tải quận/huyện.", "text-danger");
+                    });
+
+                updateFullAddress();
+            }
+
+            function loadWards(districtId) {
+                $xa.html('<option value="">-- Chọn Phường/Xã --</option>').prop("disabled", true);
+
+                if (!districtId) {
+                    updateFullAddress();
+                    return;
+                }
+
+                setStatus("Đang tải phường/xã...", "text-muted");
+                $.getJSON("https://esgoo.net/api-tinhthanh/3/" + districtId + ".htm")
+                    .done(function (data) {
+                        if (data && data.error === 0) {
+                            $.each(data.data, function (_, item) {
+                                $xa.append('<option value="' + item.id + '" data-name="' + item.full_name + '">' + item.full_name + '</option>');
+                            });
+                            $xa.prop("disabled", false);
+                            setStatus("Đã nạp phường/xã.", "text-success");
+                        } else {
+                            setStatus("Không tải được phường/xã.", "text-danger");
+                        }
+                    })
+                    .fail(function () {
+                        setStatus("Lỗi kết nối khi tải phường/xã.", "text-danger");
+                    });
+
+                updateFullAddress();
+            }
+
+            function initMap() {
+                try {
+                    const latValue = parseFloat((($("#Lat").val() || "").toString()).replace(",", "."));
+                    const lngValue = parseFloat((($("#Lng").val() || "").toString()).replace(",", "."));
+                    const lat = Number.isFinite(latValue) && latValue !== 0 ? latValue : 10.762622;
+                    const lng = Number.isFinite(lngValue) && lngValue !== 0 ? lngValue : 106.660172;
+
+                    map = L.map("warehouseMap").setView([lat, lng], 13);
+                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        maxZoom: 19,
+                        attribution: "© OpenStreetMap"
+                    }).addTo(map);
+
+                    updateMarker(lat, lng);
+
+                    map.on("click", function (event) {
+                        updateMarker(event.latlng.lat, event.latlng.lng);
+                        setStatus("Đã ghim vị trí thủ công. Bạn vẫn có thể đổi lại bằng tỉnh/huyện/xã.", "text-success");
+                    });
+
+                    window.setTimeout(function () {
+                        map.invalidateSize();
+                    }, 250);
+                } catch (error) {
+                    setStatus("Không khởi tạo được bản đồ. Bạn vẫn có thể chọn địa chỉ.", "text-danger");
+                    console.error(error);
+                }
+            }
+
+            populateProvinces();
+            initMap();
+            updateFullAddress();
+
+            $tinh.on("change", function () {
+                loadDistricts($(this).val());
+                searchMapAddress(
+                    buildAdministrativeQuery("province"),
+                    10,
+                    "Bản đồ đã chuyển tới tỉnh/thành phố đã chọn.",
+                    "Không tìm thấy vị trí của tỉnh/thành phố này trên bản đồ."
+                );
+            });
+
+            $huyen.on("change", function () {
+                loadWards($(this).val());
+                searchMapAddress(
+                    buildAdministrativeQuery("district"),
+                    12,
+                    "Bản đồ đã chuyển tới quận/huyện đã chọn.",
+                    "Không tìm thấy vị trí của quận/huyện này trên bản đồ."
+                );
+            });
+
+            $xa.on("change", function () {
+                updateFullAddress();
+                searchMapAddress(
+                    buildAdministrativeQuery("ward"),
+                    14,
+                    "Bản đồ đã chuyển tới phường/xã đã chọn.",
+                    "Không tìm thấy vị trí của phường/xã này trên bản đồ."
+                );
+            });
+
+            $soNha.on("input", function () {
+                updateFullAddress();
+
+                if (houseSearchTimer) {
+                    clearTimeout(houseSearchTimer);
+                }
+
+                const fullStreetQuery = buildFullStreetQuery();
+                if (!fullStreetQuery) {
+                    if ($soNha.val().trim()) {
+                        setStatus("Hãy chọn đủ tỉnh, quận/huyện, phường/xã trước khi định vị số nhà và tên đường.", "text-muted");
+                    }
+                    return;
+                }
+
+                houseSearchTimer = setTimeout(function () {
+                    searchMapAddress(
+                        fullStreetQuery,
+                        17,
+                        "Đã định vị theo số nhà và tên đường.",
+                        "Không định vị chính xác được số nhà/tên đường. Bạn có thể ghim trực tiếp trên bản đồ để chỉnh chuẩn hơn."
+                    );
+                }, 700);
+            });
+        });
     </script>
 }

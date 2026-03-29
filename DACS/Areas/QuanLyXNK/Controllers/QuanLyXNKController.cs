@@ -19,16 +19,19 @@ namespace DACS.Areas.QuanLyXNK.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<QuanLyXNKController> _logger;
         private readonly BlockchainService _blockchainService;
+        private readonly AIMatchingService _aiMatchingService;
 
         public QuanLyXNKController(ApplicationDbContext context,
                                      UserManager<ApplicationUser> userManager,
-                                     ILogger<QuanLyXNKController> logger, BlockchainService blockchainService
+                                     ILogger<QuanLyXNKController> logger, BlockchainService blockchainService,
+                                     AIMatchingService aiMatchingService
                                      )
         {
             _context = context;
             _userManager = userManager;
             _logger = logger;
             _blockchainService = blockchainService;
+            _aiMatchingService = aiMatchingService;
         }
 
         public async Task<IActionResult> Index(string? searchTerm, DateTime? dateFilter, string? statusFilter, string? collectorFilter, int page = 1)
@@ -84,20 +87,24 @@ namespace DACS.Areas.QuanLyXNK.Controllers
 
             var stats = await CalculateStatisticsAsync(query);
 
-            var listViewModel = pagedData.Select(yc => MapToListItemViewModel(yc)).ToList();
-
             var statusOptions = await GetStatusOptionsAsync(statusFilter);
             var collectorOptions = await GetCollectorOptionsAsync(collectorFilter);
 
-            var activeWarehouses = await _context.KhoHangs
-                                    .Where(kh => kh.TrangThai != KhoHangTrangThai.BaoTri)
-                                    .OrderBy(kh => kh.TenKho)
-                                    .Select(kh => new SelectListItem
-                                    {
-                                        Value = kh.MaKho,
-                                        Text = $"{kh.TenKho} ({kh.MaKho})"
-                                    })
-                                    .ToListAsync();
+            var activeWarehouseEntities = await _context.KhoHangs
+                .Where(kh => kh.TrangThai != KhoHangTrangThai.BaoTri && kh.TrangThai != KhoHangTrangThai.NgungSuDung)
+                .OrderBy(kh => kh.TenKho)
+                .ToListAsync();
+
+            var activeWarehouses = activeWarehouseEntities
+                .Select(kh => new SelectListItem
+                {
+                    Value = kh.MaKho,
+                    Text = $"{kh.TenKho} ({kh.MaKho})"
+                })
+                .ToList();
+
+            var warehouseSuggestions = await GetWarehouseSuggestionsAsync(pagedData, activeWarehouseEntities);
+            var listViewModel = pagedData.Select(yc => MapToListItemViewModel(yc, warehouseSuggestions)).ToList();
 
             var viewModel = new QuanLyThuGomViewModel
             {
@@ -117,7 +124,9 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             return View(viewModel);
         }
 
-        private YeuCauListItemViewModel MapToListItemViewModel(YeuCauThuGom yc)
+        private YeuCauListItemViewModel MapToListItemViewModel(
+            YeuCauThuGom yc,
+            IReadOnlyDictionary<string, AIKhoHangSuggestionViewModel>? warehouseSuggestions = null)
         {
             var firstDetail = yc.ChiTietThuGoms?.FirstOrDefault();
             var kh = yc.KhachHang;
@@ -145,8 +154,80 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 TrangThai = yc.TrangThai,
                 TenNguoiThuGom = yc.QuanLy?.FullName
                                 ?? yc.QuanLy?.UserName
-                                ?? "Chưa gán"
+                                ?? "Chưa gán",
+                GoiYKhoHang = warehouseSuggestions != null && warehouseSuggestions.TryGetValue(yc.M_YeuCau, out var suggestion)
+                    ? suggestion
+                    : null
             };
+        }
+
+        private async Task<Dictionary<string, AIKhoHangSuggestionViewModel>> GetWarehouseSuggestionsAsync(
+            List<YeuCauThuGom> requests,
+            List<KhoHang> warehouses)
+        {
+            if (!requests.Any() || !warehouses.Any())
+            {
+                return new Dictionary<string, AIKhoHangSuggestionViewModel>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var eligibleRequests = requests
+                .Where(yc => yc.TrangThai != "Hoàn thành" && yc.TrangThai != "Thu gom thành công" && yc.TrangThai != "Đã hủy")
+                .Select(yc => new
+                {
+                    m_yeucau = yc.M_YeuCau,
+                    ten_san_pham = yc.ChiTietThuGoms.FirstOrDefault()?.SanPham?.TenSanPham ?? string.Empty,
+                    so_luong = yc.ChiTietThuGoms.FirstOrDefault()?.SoLuong ?? 0,
+                    thoi_gian_san_sang = yc.ThoiGianSanSang != default ? yc.ThoiGianSanSang.ToString("O") : null,
+                    tinh_thanh = yc.TinhThanhPho?.TenTinh,
+                    quan_huyen = yc.QuanHuyen?.TenQuan,
+                    xa_phuong = yc.XaPhuong?.TenXa,
+                    lat = yc.Lat,
+                    lng = yc.Lng
+                })
+                .Cast<object>()
+                .ToList();
+
+            if (!eligibleRequests.Any())
+            {
+                return new Dictionary<string, AIKhoHangSuggestionViewModel>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var warehouseInputs = warehouses
+                .Select(kh =>
+                {
+                    var segments = SplitAddressSegments(kh.DiaChi);
+                    return new
+                    {
+                        ma_kho = kh.MaKho,
+                        ten_kho = kh.TenKho,
+                        dia_chi = kh.DiaChi,
+                        trang_thai = kh.TrangThai,
+                        xa_phuong = segments.ward,
+                        quan_huyen = segments.district,
+                        tinh_thanh = segments.province,
+                        lat = kh.Lat,
+                        lng = kh.Lng
+                    };
+                })
+                .Cast<object>()
+                .ToList();
+
+            return await _aiMatchingService.GetWarehouseSuggestionsAsync(eligibleRequests, warehouseInputs);
+        }
+
+        private static (string? ward, string? district, string? province) SplitAddressSegments(string? address)
+        {
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                return (null, null, null);
+            }
+
+            var segments = address.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var province = segments.Length >= 1 ? segments[^1] : null;
+            var district = segments.Length >= 2 ? segments[^2] : null;
+            var ward = segments.Length >= 3 ? segments[^3] : null;
+
+            return (ward, district, province);
         }
 
         private async Task<ThuGomStatisticsViewModel> CalculateStatisticsAsync(IQueryable<YeuCauThuGom> baseQuery)
@@ -483,7 +564,7 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var khoDicExists = await _context.KhoHangs.AnyAsync(kh => kh.MaKho == targetMaKho);
+            var khoDicExists = await _context.KhoHangs.AnyAsync(kh => kh.MaKho == targetMaKho && kh.TrangThai != KhoHangTrangThai.BaoTri && kh.TrangThai != KhoHangTrangThai.NgungSuDung);
             if (!khoDicExists)
             {
                 TempData["ErrorMessage"] = $"Kho đích '{targetMaKho}' không tồn tại.";

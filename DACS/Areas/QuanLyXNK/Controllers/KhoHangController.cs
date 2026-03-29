@@ -52,7 +52,8 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 TongKho = await _context.KhoHangs.CountAsync(),
                 ConTrong = await _context.KhoHangs.CountAsync(kh => kh.TrangThai == KhoHangTrangThai.ConTrong),
                 GanDay = await _context.KhoHangs.CountAsync(kh => kh.TrangThai == KhoHangTrangThai.GanDay),
-                BaoTri = await _context.KhoHangs.CountAsync(kh => kh.TrangThai == KhoHangTrangThai.BaoTri)
+                BaoTri = await _context.KhoHangs.CountAsync(kh => kh.TrangThai == KhoHangTrangThai.BaoTri),
+                NgungSuDung = await _context.KhoHangs.CountAsync(kh => kh.TrangThai == KhoHangTrangThai.NgungSuDung)
                 // Thêm các trạng thái khác nếu có
             };
 
@@ -98,7 +99,8 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 new SelectListItem { Value = "all", Text = "Tất cả trạng thái" }, // Đổi Text cho rõ nghĩa hơn
                 new SelectListItem { Value = KhoHangTrangThai.ConTrong, Text = KhoHangTrangThai.ConTrong },
                 new SelectListItem { Value = KhoHangTrangThai.GanDay, Text = KhoHangTrangThai.GanDay },
-                new SelectListItem { Value = KhoHangTrangThai.BaoTri, Text = KhoHangTrangThai.BaoTri }
+                new SelectListItem { Value = KhoHangTrangThai.BaoTri, Text = KhoHangTrangThai.BaoTri },
+                new SelectListItem { Value = KhoHangTrangThai.NgungSuDung, Text = KhoHangTrangThai.NgungSuDung }
                 // Thêm các trạng thái khác nếu có
             };
             var currentSelected = options.FirstOrDefault(o => o.Value == selectedStatus);
@@ -122,7 +124,8 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 // Không có option "all" ở đây
                 new SelectListItem { Value = KhoHangTrangThai.ConTrong, Text = KhoHangTrangThai.ConTrong },
                 new SelectListItem { Value = KhoHangTrangThai.GanDay, Text = KhoHangTrangThai.GanDay },
-                new SelectListItem { Value = KhoHangTrangThai.BaoTri, Text = KhoHangTrangThai.BaoTri }
+                new SelectListItem { Value = KhoHangTrangThai.BaoTri, Text = KhoHangTrangThai.BaoTri },
+                new SelectListItem { Value = KhoHangTrangThai.NgungSuDung, Text = KhoHangTrangThai.NgungSuDung }
                 // Thêm các trạng thái khác nếu có
             };
 
@@ -139,6 +142,35 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             // Nếu selectedStatus có giá trị nhưng không nằm trong danh sách (ít xảy ra), không chọn gì cả hoặc chọn mặc định
 
             return options;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleUsage(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return NotFound();
+            }
+
+            var khoHang = await _context.KhoHangs.FindAsync(id);
+            if (khoHang == null)
+            {
+                TempData["ErrorMessage"] = "Không tìm thấy kho hàng để cập nhật trạng thái sử dụng.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            khoHang.TrangThai = khoHang.TrangThai == KhoHangTrangThai.NgungSuDung
+                ? KhoHangTrangThai.ConTrong
+                : KhoHangTrangThai.NgungSuDung;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = khoHang.TrangThai == KhoHangTrangThai.NgungSuDung
+                ? $"Đã chuyển kho '{khoHang.TenKho}' sang trạng thái ngưng sử dụng."
+                : $"Đã kích hoạt lại kho '{khoHang.TenKho}'.";
+
+            return RedirectToAction(nameof(Index));
         }
 
 
@@ -168,14 +200,22 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             // Chuẩn bị danh sách trạng thái cho dropdown trong view Create
             ViewBag.TrangThaiOptions = GetEditableStatusOptions(null); // Truyền null để chọn trạng thái mặc định (Còn trống)
             // Trả về View Create.cshtml (cần tạo file này) với một đối tượng KhoHang mới (rỗng)
-            return View(new KhoHang());
+            return View(new KhoHang
+            {
+                TenLoaiKho = "Kho hàng"
+            });
         }
 
         // POST: QuanLyXNK/KhoHang/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("MaKho,TenKho,DiaChi,SucChuaTomTat,TrangThai")] KhoHang khoHang)
+        public async Task<IActionResult> Create([Bind("MaKho,TenKho,DiaChi,SucChuaTomTat,TrangThai,TenLoaiKho,Lat,Lng")] KhoHang khoHang)
         {
+            if (string.IsNullOrWhiteSpace(khoHang.TenLoaiKho))
+            {
+                khoHang.TenLoaiKho = "Kho hàng";
+            }
+
             // Kiểm tra xem dữ liệu gửi lên có hợp lệ theo các quy tắc validation trong Model KhoHang không
             if (ModelState.IsValid)
             {
@@ -236,8 +276,13 @@ namespace DACS.Areas.QuanLyXNK.Controllers
         // POST: QuanLyXNK/KhoHang/Edit/{id}
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(string id, [Bind("MaKho,TenKho,DiaChi,SucChuaTomTat,TrangThai")] KhoHang khoHang)
+        public async Task<IActionResult> Edit(string id, [Bind("MaKho,TenKho,DiaChi,SucChuaTomTat,TrangThai,TenLoaiKho,Lat,Lng")] KhoHang khoHang)
         {
+            if (string.IsNullOrWhiteSpace(khoHang.TenLoaiKho))
+            {
+                khoHang.TenLoaiKho = "Kho hàng";
+            }
+
             // Đảm bảo ID từ route và ID trong model khớp nhau
             if (id != khoHang.MaKho)
             {
@@ -295,13 +340,26 @@ namespace DACS.Areas.QuanLyXNK.Controllers
 
             try
             {
-                // TODO: Kiểm tra xem kho hàng có ràng buộc dữ liệu không (ví dụ: còn hàng tồn kho trong kho này)
-                // Nếu có ràng buộc, không cho xóa và thông báo lỗi
-                // var coTonKho = await _context.TonKhos.AnyAsync(tk => tk.MaKho == id);
-                // if (coTonKho) {
-                //      TempData["ErrorMessage"] = "Không thể xóa kho hàng này vì vẫn còn sản phẩm tồn kho.";
-                //      return RedirectToAction(nameof(Index));
-                // }
+                var soLoTonKho = await _context.LoTonKhos.CountAsync(lo => lo.MaKho == id);
+                var soPhieuXuat = await _context.PhieuXuats.CountAsync(px => px.MaKho == id);
+
+                if (soLoTonKho > 0 || soPhieuXuat > 0)
+                {
+                    var lyDoRangBuoc = new List<string>();
+
+                    if (soLoTonKho > 0)
+                    {
+                        lyDoRangBuoc.Add($"{soLoTonKho} lô tồn kho");
+                    }
+
+                    if (soPhieuXuat > 0)
+                    {
+                        lyDoRangBuoc.Add($"{soPhieuXuat} phiếu xuất");
+                    }
+
+                    TempData["ErrorMessage"] = $"Không thể xóa kho hàng '{khoHang.TenKho}' vì vẫn còn dữ liệu liên quan: {string.Join(", ", lyDoRangBuoc)}.";
+                    return RedirectToAction(nameof(Index));
+                }
 
                 _context.KhoHangs.Remove(khoHang);
                 await _context.SaveChangesAsync();

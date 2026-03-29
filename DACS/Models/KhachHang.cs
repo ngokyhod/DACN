@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel;
 using Microsoft.AspNetCore.Identity; // Thêm nếu ApplicationUser ở namespace khác
 using System.Collections.Generic; // Thêm cho ICollection
 
@@ -79,6 +80,53 @@ namespace DACS.Models
         [ForeignKey("Id")] // Đảm bảo ForeignKey trỏ đúng vào thuộc tính MaXa ở trên
         public virtual ChiTietLienHe? ChiTietLienHe { get; set; }
         public virtual ICollection<ChiTietDatHang> ChiTietDatHangs { get; set; } = new List<ChiTietDatHang>();
+
+    [StringLength(255)]
+    [DisplayName("Tên Doanh Nghiệp")]
+    public string? TenDoanhNghiep { get; set; }
+
+    [StringLength(255)]
+    [DisplayName("Lĩnh Vực Hoạt Động")]
+    public string? LinhVucHoatDong { get; set; }
+
+    [DisplayName("Nhu Cầu Thu Mua Chính")]
+    public string? NhuCauChinh { get; set; }
+
+    [StringLength(255)]
+    [DisplayName("Giấy Phép Kinh Doanh (Ảnh)")]
+    public string? GiayPhepKinhDoanhUrl { get; set; }
+
+    [StringLength(255)]
+    [DisplayName("Địa chỉ Doanh Nghiệp")]
+    public string? DiaChiDoanhNghiep { get; set; }
+
+    [StringLength(10)]
+    [DisplayName("Mã Tỉnh/Thành Doanh Nghiệp")]
+    public string? MaTinhDoanhNghiep { get; set; }
+
+    [StringLength(10)]
+    [DisplayName("Mã Quận/Huyện Doanh Nghiệp")]
+    public string? MaQuanDoanhNghiep { get; set; }
+
+    [StringLength(10)]
+    [DisplayName("Mã Xã/Phường Doanh Nghiệp")]
+    public string? MaXaDoanhNghiep { get; set; }
+
+    [StringLength(200)]
+    [DisplayName("Đường/Ấp/Thôn Doanh Nghiệp")]
+    public string? DiaChiDuongDoanhNghiep { get; set; }
+
+    [StringLength(100)]
+    [DisplayName("Thành phố / Tỉnh (Doanh Nghiệp)")]
+    public string? TinhThanhDoanhNghiep { get; set; }
+
+    [Range(-90, 90, ErrorMessage = "Vĩ độ doanh nghiệp không hợp lệ.")]
+    public double? EnterpriseLat { get; set; }
+
+    [Range(-180, 180, ErrorMessage = "Kinh độ doanh nghiệp không hợp lệ.")]
+    public double? EnterpriseLng { get; set; }
+
+    public bool IsEnterpriseVerified { get; set; } = false;
         public virtual ICollection<ChiTietDanhGia> ChiTietDanhGias { get; set; } = new List<ChiTietDanhGia>();
         public virtual ICollection<YeuCauThuGom> YeuCauThuGoms { get; set; } = new List<YeuCauThuGom>();
         public virtual ICollection<ChatHistory> ChatHistories { get; set; } = new List<ChatHistory>();

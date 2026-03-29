@@ -68,6 +68,14 @@ namespace DACS.Models.ViewModels // <<< Thay namespace cho đúng với project 
 
         public string SupplierStreet { get; set; }
 
+        [Display(Name = "Vĩ độ")]
+        [Range(-90, 90, ErrorMessage = "Vĩ độ (Lat) không hợp lệ.")]
+        public double? Lat { get; set; }
+
+        [Display(Name = "Kinh độ")]
+        [Range(-180, 180, ErrorMessage = "Kinh độ (Lng) không hợp lệ.")]
+        public double? Lng { get; set; }
+
 
 
         [Display(Name = "Thời gian sẵn sàng lấy")]

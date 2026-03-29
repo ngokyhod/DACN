@@ -119,7 +119,7 @@ namespace DACS.Areas.QuanLyXNK.Controllers
         private async Task PopulateDropdownsAsync(PhieuXuatCreateViewModel viewModel)
         {
             viewModel.KhoHangOptions = await _context.KhoHangs
-                .Where(kh => kh.TrangThai != KhoHangTrangThai.BaoTri) // Chỉ kho hoạt động
+                .Where(kh => kh.TrangThai != KhoHangTrangThai.BaoTri && kh.TrangThai != KhoHangTrangThai.NgungSuDung) // Chỉ kho hoạt động
                 .OrderBy(kh => kh.TenKho)
                 .Select(kh => new SelectListItem { Value = kh.MaKho, Text = kh.TenKho + " (" + kh.MaKho + ")" })
                 .ToListAsync();
