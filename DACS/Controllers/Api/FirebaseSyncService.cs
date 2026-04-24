@@ -40,8 +40,6 @@ public class FirebaseSyncService
                 DisplayName = displayName,
                 PhoneNumber = phoneNumber, // Lưu ý: SĐT phải chuẩn E.164 (+84...)
                 Disabled = false,
-                PhotoUrl = null,
-                
             };
 
             UserRecord userRecord = await FirebaseAuth.DefaultInstance.CreateUserAsync(userArgs);
