@@ -46,6 +46,18 @@
         <body>
 <h2 class="mb-4">Xác nhận đơn hàng</h2>
 
+@if (ViewBag.CartErrors != null)
+{
+    <div class="alert alert-danger">
+        <ul class="mb-0">
+            @foreach (var err in ViewBag.CartErrors)
+            {
+                <li>@err</li>
+            }
+        </ul>
+    </div>
+}
+
 @if (cart == null || !cart.Items.Any())
 {
     <div class="alert alert-warning">Giỏ hàng của bạn đang trống.</div>

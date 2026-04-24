@@ -1,0 +1,31 @@
+@{
+    var currentArea = ViewContext.RouteData.Values["Area"]?.ToString() ?? string.Empty;
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+
+    var isDashboardActive = currentArea == "Owner" && currentController == "Owner" && currentAction == "Index";
+    var isRevenueActive = currentArea == "Owner" && currentController == "DoanhThu";
+    var isUserManagementActive = currentArea == "Owner" && currentController == "QuanLyND" && currentAction != "DuyetDoanhNghiep";
+    var isEnterpriseReviewActive = currentArea == "QuanLyND" && currentController == "QuanLyND" && currentAction == "DuyetDoanhNghiep";
+    var isProductManagementActive = currentArea == "Owner" && currentController == "QuanLySP";
+    var isCollectionManagementActive = currentArea == "Owner" && currentController == "QuanLyXNK";
+    var isOrderManagementActive = currentArea == "Owner" && currentController == "QuanLyDonHang";
+    var isPaymentManagementActive = currentArea == "Owner" && currentController == "QuanLyThanhToan";
+}
+
+<div class="sidebar">
+    <h2>OWNER</h2>
+    <ul class="nav flex-column">
+        <li class="nav-item"><a asp-area="Owner" asp-controller="Owner" asp-action="Index" class="nav-link @(isDashboardActive ? "active" : string.Empty)"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="DoanhThu" asp-action="Index" class="nav-link @(isRevenueActive ? "active" : string.Empty)"><i class="fas fa-chart-line me-2"></i> Doanh thu</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyND" asp-action="Index" class="nav-link @(isUserManagementActive ? "active" : string.Empty)"><i class="fas fa-users me-2"></i> Quản lý Tài khoản</a></li>
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyND" asp-action="DuyetDoanhNghiep" class="nav-link @(isEnterpriseReviewActive ? "active" : string.Empty)"><i class="fas fa-building me-2"></i> Duyệt doanh nghiệp</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLySP" asp-action="Index" class="nav-link @(isProductManagementActive ? "active" : string.Empty)"><i class="fas fa-box-open me-2"></i> Quản lý Sản phẩm</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyXNK" asp-action="Index" class="nav-link @(isCollectionManagementActive ? "active" : string.Empty)"><i class="fas fa-truck-loading me-2"></i> Quản lý Thu gom</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyDonHang" asp-action="Index" class="nav-link @(isOrderManagementActive ? "active" : string.Empty)"><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
+        <li class="nav-item"><a asp-area="Owner" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link @(isPaymentManagementActive ? "active" : string.Empty)"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh toán</a></li>
+    </ul>
+    <div class="nav-item mt-auto">
+        <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
+    </div>
+</div>

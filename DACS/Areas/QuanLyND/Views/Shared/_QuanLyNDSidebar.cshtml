@@ -1,0 +1,40 @@
+@{
+    var currentArea = ViewContext.RouteData.Values["Area"]?.ToString() ?? string.Empty;
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+
+    var isUserManagementActive = currentArea.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && (currentAction.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            || currentAction.Equals("Create", StringComparison.OrdinalIgnoreCase)
+            || currentAction.Equals("Edit", StringComparison.OrdinalIgnoreCase)
+            || currentAction.Equals("Details", StringComparison.OrdinalIgnoreCase));
+
+    var isFeedbackActive = currentArea.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyPhanHoi", StringComparison.OrdinalIgnoreCase);
+
+    var isChatActive = currentArea.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyHoTro", StringComparison.OrdinalIgnoreCase);
+
+    var isActivityActive = currentArea.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentAction.Equals("QuanLyHanhDong", StringComparison.OrdinalIgnoreCase);
+
+    var isReportActive = currentArea.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyND", StringComparison.OrdinalIgnoreCase)
+        && currentAction.Equals("QuanLyBaoCao", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="sidebar">
+    <h4>Quản Lý ND</h4>
+    <ul class="nav flex-column">
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyND" asp-action="Index" class="nav-link @(isUserManagementActive ? "active" : string.Empty)"><i class="fas fa-users me-2"></i> Quản lý Tài khoản</a></li>
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyPhanHoi" asp-action="Index" class="nav-link @(isFeedbackActive ? "active" : string.Empty)"><i class="fas fa-comments me-2"></i> Phản hồi & Đánh giá</a></li>
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyHoTro" asp-action="Index" class="nav-link @(isChatActive ? "active" : string.Empty)"><i class="fas fa-headset me-2"></i> Live Chat</a></li>
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyND" asp-action="QuanLyHanhDong" class="nav-link @(isActivityActive ? "active" : string.Empty)"><i class="fas fa-history me-2"></i> Lịch sử hoạt động</a></li>
+        <li class="nav-item"><a asp-area="QuanLyND" asp-controller="QuanLyND" asp-action="QuanLyBaoCao" class="nav-link @(isReportActive ? "active" : string.Empty)"><i class="fas fa-chart-bar me-2"></i> Báo cáo người dùng</a></li>
+    </ul>
+    <div class="nav-item mt-auto">
+        <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
+    </div>
+</div>

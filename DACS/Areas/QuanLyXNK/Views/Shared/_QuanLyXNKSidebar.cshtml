@@ -1,0 +1,40 @@
+@{
+    var currentArea = ViewContext.RouteData.Values["Area"]?.ToString() ?? string.Empty;
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+
+    var isCollectionActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase);
+
+    var isExportListActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyDSPX", StringComparison.OrdinalIgnoreCase)
+        && !currentAction.Equals("Create", StringComparison.OrdinalIgnoreCase);
+
+    var isExportCreateActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyDSPX", StringComparison.OrdinalIgnoreCase)
+        && currentAction.Equals("Create", StringComparison.OrdinalIgnoreCase);
+
+    var isWarehouseActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("KhoHang", StringComparison.OrdinalIgnoreCase);
+
+    var isInventoryActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("TonKho", StringComparison.OrdinalIgnoreCase);
+
+    var isStatisticsActive = currentArea.Equals("QuanLyXNK", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("ThongKe", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="sidebar">
+    <h2>Quản Lý XNK</h2>
+    <ul class="nav flex-column">
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyXNK" asp-action="Index" class="nav-link @(isCollectionActive ? "active" : string.Empty)"><i class="fas fa-truck-loading me-2"></i> Quản lý Thu gom</a></li>
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyDSPX" asp-action="Index" class="nav-link @(isExportListActive ? "active" : string.Empty)"><i class="fas fa-dolly-flatbed me-2"></i> DS Phiếu Xuất</a></li>
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyDSPX" asp-action="Create" class="nav-link @(isExportCreateActive ? "active" : string.Empty)"><i class="fas fa-plus-circle me-2"></i> Tạo Phiếu Xuất</a></li>
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="KhoHang" asp-action="Index" class="nav-link @(isWarehouseActive ? "active" : string.Empty)"><i class="fas fa-warehouse me-2"></i> DS Kho hàng</a></li>
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="TonKho" asp-action="Index" class="nav-link @(isInventoryActive ? "active" : string.Empty)"><i class="fas fa-boxes-stacked me-2"></i> Tồn kho SP</a></li>
+        <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="ThongKe" asp-action="Index" class="nav-link @(isStatisticsActive ? "active" : string.Empty)"><i class="fas fa-chart-bar me-2"></i> Thống kê NX</a></li>
+    </ul>
+    <div class="nav-item mt-auto">
+        <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
+    </div>
+</div>

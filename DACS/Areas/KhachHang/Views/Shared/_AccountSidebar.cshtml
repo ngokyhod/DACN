@@ -1,0 +1,47 @@
+@{
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+    var isCollectionHistoryActive = currentAction == "LichSuYeuCauThuGom"
+        || currentAction == "YeuCauThuGomDetails"
+        || currentAction == "YeuCauThuGomEdit";
+}
+
+<div class="account-menu list-group shadow-sm">
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index"
+       class="list-group-item list-group-item-action @(currentAction == "Index" ? "active" : string.Empty)">
+        <i class="fas fa-tachometer-alt fa-fw me-2"></i> Tổng quan
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan"
+       class="list-group-item list-group-item-action @(currentAction == "HoSoCaNhan" ? "active" : string.Empty)">
+        <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="DangKyDoanhNghiep"
+       class="list-group-item list-group-item-action @(currentAction == "DangKyDoanhNghiep" ? "active" : string.Empty)">
+        <i class="fas fa-building fa-fw me-2"></i> Đăng ký Doanh nghiệp
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang"
+       class="list-group-item list-group-item-action @(currentAction == "LichSuDonHang" ? "active" : string.Empty)">
+        <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="AIMatching"
+       class="list-group-item list-group-item-action @(currentAction == "AIMatching" ? "active" : string.Empty)">
+        <i class="fas fa-robot fa-fw me-2 text-success"></i> AI Matching
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuYeuCauThuGom"
+       class="list-group-item list-group-item-action @(isCollectionHistoryActive ? "active" : string.Empty)">
+        <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia"
+       class="list-group-item list-group-item-action @(currentAction == "SanPhamChoDanhGia" ? "active" : string.Empty)">
+        <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
+    </a>
+    <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia"
+       class="list-group-item list-group-item-action @(currentAction == "LichSuDanhGia" ? "active" : string.Empty)">
+        <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
+    </a>
+    <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword" class="list-group-item list-group-item-action">
+        <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
+    </a>
+    <a href="/home/index" class="list-group-item list-group-item-action text-danger">
+        <i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ
+    </a>
+</div>

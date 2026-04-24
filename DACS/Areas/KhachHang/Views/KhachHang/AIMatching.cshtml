@@ -10,73 +10,36 @@
 <div class="container mt-4 account-section">
     <div class="row">
         <div class="col-lg-3 mb-4 mb-lg-0">
-            <div class="account-menu list-group">
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="Index" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active" : "")">
-                    <i class="fas fa-tachometer-alt fa-fw me-2"></i> Tổng quan
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="HoSoCaNhan" class="list-group-item list-group-item-action">
-                    <i class="fas fa-user-circle fa-fw me-2"></i> Hồ sơ cá nhân
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="DangKyDoanhNghiep" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "DangKyDoanhNghiep" ? "active" : "")">
-                    <i class="fas fa-building fa-fw me-2"></i> Đăng ký Doanh nghiệp
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDonHang" class="list-group-item list-group-item-action">
-                    <i class="fas fa-receipt fa-fw me-2"></i> Lịch sử Đơn hàng
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="AIMatching" class="list-group-item list-group-item-action active">
-                    <i class="fas fa-robot fa-fw me-2 text-success"></i> AI Matching
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuYeuCauThuGom" class="list-group-item list-group-item-action">
-                    <i class="fas fa-recycle fa-fw me-2"></i> Lịch sử Thu gom
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="SanPhamChoDanhGia" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "SanPhamChoDanhGia" ? "active" : "")">
-                    <i class="fas fa-star fa-fw me-2 text-warning"></i> Chờ đánh giá
-                </a>
-                <a asp-area="KhachHang" asp-controller="KhachHang" asp-action="LichSuDanhGia" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "LichSuDanhGia" ? "active" : "")">
-                    <i class="fas fa-history fa-fw me-2 text-success"></i> Lịch sử đánh giá
-                </a>
-                <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword" class="list-group-item list-group-item-action">
-                    <i class="fas fa-lock fa-fw me-2"></i> Đổi mật khẩu
-                </a>
-                <button type="submit" class="list-group-item list-group-item-action text-danger border-0 bg-transparent p-0 w-100 text-start">
-                    <a href="/home/index" class="list-group-item list-group-item-action border-0 text-danger"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
-                </button>
-            </div>
+            @await Html.PartialAsync("~/Areas/KhachHang/Views/Shared/_AccountSidebar.cshtml")
         </div>
 
         <div class="col-lg-9">
             <div class="account-content">
-                <div class="ai-hero card border-0 shadow-sm mb-4 overflow-hidden">
-                    <div class="card-body p-4 p-lg-5">
-                        <div class="row g-4 align-items-start">
-                            <div class="col-lg-7">
-                                <span class="ai-hero-kicker">Bảng gợi ý thu mua thông minh</span>
-                                <h1 class="ai-hero-title mt-2 mb-3">AI Matching doanh nghiệp</h1>
-                                <p class="ai-hero-copy mb-0">Xin chào, @displayName. Hệ thống đang ưu tiên các sản phẩm phù hợp với nhu cầu, ở kho gần doanh nghiệp và có đủ khối lượng để bạn mua nhanh.</p>
+                <section class="ai-header card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-column flex-lg-row justify-content-between gap-4 align-items-start">
+                            <div class="ai-header-copy">
+                                <span class="ai-header-kicker">Bang goi y thu mua thong minh</span>
+                                <h1 class="ai-header-title mb-2">AI Matching doanh nghiep</h1>
+                                <p class="ai-header-text mb-0">Xin chao, @displayName. He thong uu tien cac san pham phu hop voi nhu cau, gan doanh nghiep va san hang de ban xu ly nhanh hon.</p>
                             </div>
-                            <div class="col-lg-5">
-                                <div class="ai-hero-panel">
-                                    <div class="ai-hero-meta-label">Nhu cầu đang theo dõi</div>
-                                    <div class="ai-hero-meta-value">@(Model?.KhachHangInfo?.NhuCauChinh ?? "Chưa khai báo nhu cầu")</div>
-                                    <div class="row g-2 mt-3">
-                                        <div class="col-sm-6">
-                                            <div class="ai-hero-stat">
-                                                <span class="ai-hero-stat-label">Số gợi ý</span>
-                                                <strong>@(Model?.AIGoiYThuMua?.Count ?? 0)</strong>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <div class="ai-hero-stat">
-                                                <span class="ai-hero-stat-label">Địa chỉ doanh nghiệp</span>
-                                                <strong>@(Model?.KhachHangInfo?.DiaChiDoanhNghiep ?? "Chưa cập nhật")</strong>
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div class="ai-header-stats">
+                                <div class="ai-info-card">
+                                    <span class="ai-info-label">Nhu cau</span>
+                                    <strong>@(Model?.KhachHangInfo?.NhuCauChinh ?? "Chua khai bao")</strong>
+                                </div>
+                                <div class="ai-info-card ai-info-card--small">
+                                    <span class="ai-info-label">So goi y</span>
+                                    <strong>@(Model?.AIGoiYThuMua?.Count ?? 0)</strong>
+                                </div>
+                                <div class="ai-info-card ai-info-card--small">
+                                    <span class="ai-info-label">Dia chi</span>
+                                    <strong>@(Model?.KhachHangInfo?.DiaChiDoanhNghiep ?? "Chua cap nhat")</strong>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
                 <div class="card border-success shadow-sm">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
@@ -246,84 +209,93 @@
 </script>
 
 <style>
-    .ai-hero {
+    .ai-header {
         background:
-            radial-gradient(circle at top right, rgba(12, 140, 91, 0.18), transparent 32%),
-            linear-gradient(135deg, #f8fffb 0%, #eef9f3 48%, #e2f4ea 100%);
+            radial-gradient(circle at top right, rgba(25, 135, 84, 0.12), transparent 26%),
+            linear-gradient(135deg, #fbfefc 0%, #f2faf5 100%);
+        border-radius: 24px;
     }
 
-    .ai-hero-kicker {
+    .ai-header-copy {
+        max-width: 620px;
+    }
+
+    .ai-header-kicker {
         display: inline-block;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.14em;
         color: #198754;
         background: rgba(25, 135, 84, 0.12);
-        padding: 0.45rem 0.7rem;
+        padding: 0.4rem 0.75rem;
         border-radius: 999px;
     }
 
-    .ai-hero-title {
-        font-size: clamp(2rem, 4vw, 3.1rem);
-        line-height: 1.05;
+    .ai-header-title {
+        margin-top: 0.9rem;
+        font-size: clamp(1.9rem, 3vw, 2.6rem);
+        line-height: 1.12;
         color: #123524;
-        max-width: 10ch;
     }
 
-    .ai-hero-copy {
-        font-size: 1.05rem;
-        line-height: 1.8;
-        color: #4b6357;
-        max-width: 58ch;
+    .ai-header-text {
+        font-size: 1rem;
+        line-height: 1.75;
+        color: #567264;
     }
 
-    .ai-hero-panel {
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(25, 135, 84, 0.16);
-        border-radius: 24px;
-        padding: 1.2rem;
-        backdrop-filter: blur(8px);
+    .ai-header-stats {
+        min-width: min(100%, 360px);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.9rem;
     }
 
-    .ai-hero-meta-label,
-    .ai-hero-stat-label {
-        display: block;
+    .ai-info-card {
+        grid-column: 1 / -1;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(25, 135, 84, 0.12);
+        border-radius: 18px;
+        padding: 1rem 1.05rem;
+    }
+
+    .ai-info-card--small {
+        grid-column: span 1;
+    }
+
+    .ai-info-label {
+        display: inline-block;
         font-size: 0.78rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: #5c7b6c;
-        margin-bottom: 0.35rem;
+        margin-bottom: 0.45rem;
     }
 
-    .ai-hero-meta-value {
-        font-size: 1.15rem;
-        font-weight: 700;
-        line-height: 1.6;
-        color: #123524;
-        word-break: break-word;
-    }
-
-    .ai-hero-stat {
-        height: 100%;
-        background: #fff;
-        border-radius: 18px;
-        padding: 0.9rem 1rem;
-        border: 1px solid rgba(25, 135, 84, 0.12);
-    }
-
-    .ai-hero-stat strong {
+    .ai-info-card strong {
         display: block;
-        font-size: 1rem;
-        line-height: 1.6;
+        font-size: 1.02rem;
+        line-height: 1.55;
         color: #123524;
         word-break: break-word;
     }
 
     @@media (max-width: 991.98px) {
-        .ai-hero-title {
-            max-width: none;
+        .ai-header-stats {
+            min-width: 100%;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .ai-header-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .ai-info-card,
+        .ai-info-card--small {
+            grid-column: 1 / -1;
         }
     }
 </style>

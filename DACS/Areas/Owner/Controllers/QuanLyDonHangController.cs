@@ -197,7 +197,6 @@ namespace DACS.Areas.Owner.Controllers
                         actualNewStatusInDb = StatusCompletedDbValue;
                         successMessagePart = "hoàn thành.";
                         canUpdate = true;
-                        // TODO: Logic khi hoàn thành (VD: ghi nhận doanh thu, cập nhật trạng thái thanh toán nếu là COD,...)
                     }
                     break;
                 case "cancel":
@@ -220,18 +219,51 @@ namespace DACS.Areas.Owner.Controllers
             if (canUpdate && !string.IsNullOrEmpty(actualNewStatusInDb))
             {
                 donHang.TrangThai = actualNewStatusInDb;
-                // donHang.ThoiGianCapNhat = DateTime.Now; // Nếu có trường này
                 _context.Update(donHang);
                 await _context.SaveChangesAsync();
+
                 var chiTietItems = await _context.ChiTietDatHangs
                               .Where(ct => ct.M_DonHang == donHang.M_DonHang)
                               .ToListAsync();
                 foreach (var item in chiTietItems)
                 {
-                    item.TrangThaiDonHang = actualNewStatusInDb; // Cập nhật trạng thái cho từng chi tiết đơn hàng
+                    item.TrangThaiDonHang = actualNewStatusInDb;
                     _context.Update(item);
                 }
                 await _context.SaveChangesAsync();
+
+                // TRỪ TỒN KHO khi đơn hoàn thành (FIFO, chống trừ 2 lần)
+                if (actualNewStatusInDb == StatusCompletedDbValue && !donHang.DaTruTonKho)
+                {
+                    try
+                    {
+                        foreach (var item in chiTietItems)
+                        {
+                            decimal soLuongCanTru = (decimal)item.Khoiluong;
+                            var cacLoHang = await _context.LoTonKhos
+                                .Where(l => l.M_SanPham == item.M_SanPham && l.KhoiLuongConLai > 0)
+                                .OrderBy(l => l.NgayNhapKho)
+                                .ToListAsync();
+
+                            foreach (var lo in cacLoHang)
+                            {
+                                if (soLuongCanTru <= 0) break;
+                                decimal layDuoc = Math.Min(soLuongCanTru, lo.KhoiLuongConLai);
+                                lo.KhoiLuongConLai -= layDuoc;
+                                soLuongCanTru -= layDuoc;
+                                _context.LoTonKhos.Update(lo);
+                            }
+                        }
+                        donHang.DaTruTonKho = true;
+                        _context.Update(donHang);
+                        await _context.SaveChangesAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log lỗi nhưng không rollback trạng thái đơn hàng
+                        TempData["WarningMessage"] = $"Đơn hàng đã hoàn thành nhưng có lỗi khi trừ tồn kho: {ex.Message}";
+                    }
+                }
 
                 TempData["SuccessMessage"] = $"Đơn hàng {donHang.M_DonHang} đã được {successMessagePart}";
             }

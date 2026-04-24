@@ -1,7 +1,7 @@
 ﻿@* Không có model cụ thể được truyền từ action GET, sử dụng ViewBag *@
 @{
     ViewData["Title"] = $"Cập nhật TT Thanh toán ĐH {ViewBag.M_DonHang}";
-    // Layout = "_AdminLayout";
+    Layout = null;
 }
 
 <!DOCTYPE html>
@@ -14,8 +14,21 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="~/css/AdminLayout.css" />
     <style>
+        body, html {
+            height: 100%;
+        }
+
+        .container {
+            display: grid;
+            max-width: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            flex-direction: row;
+        }
+
         .container-fluid.d-flex {
-            height: 100vh;
+            height: 100%;
             padding: 0;
         }
 
@@ -25,6 +38,7 @@
             padding: 15px;
             width: 250px;
             flex-shrink: 0;
+            min-height: 100vh;
         }
 
             .sidebar h2 {
@@ -68,13 +82,7 @@
 </head>
 <body>
     <div class="container-fluid d-flex p-0">
-        <div class="sidebar">
-            <h2>OWNER</h2>
-            <ul class="nav flex-column">
-                <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyDH" asp-action="Index" class="nav-link"><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
-                <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh Toán</a></li>
-            </ul>
-        </div>
+        @await Html.PartialAsync("~/Areas/QuanLyDH/Views/Shared/_QuanLyDHSidebar.cshtml")
 
         <div class="main-content-area">
             <div class="page-header">@ViewData["Title"]</div>
@@ -87,7 +95,6 @@
                     <div class="mb-3">
                         <label for="newPaymentStatus" class="form-label">Trạng Thái Thanh Toán Mới</label>
                         <select name="newPaymentStatus" class="form-select" asp-items="@ViewBag.PaymentStatusOptions">
-                            @* ViewBag.PaymentStatusOptions được truyền từ Controller *@
                         </select>
                         @Html.ValidationMessage("newPaymentStatus", "", new { @class = "text-danger" })
                     </div>

@@ -98,7 +98,8 @@
     </style>
 </head>
 <body>
-    
+    <div class="container-fluid d-flex p-0">
+        @await Html.PartialAsync("~/Areas/QuanLyDH/Views/Shared/_QuanLyDHSidebar.cshtml")
 
             @if (TempData["SuccessMessage"] != null)
             {

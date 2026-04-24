@@ -137,23 +137,7 @@
 
 <div class="d-flex main-container">
     @* --- SIDEBAR --- *@
-    <div class="sidebar">
-        <h2>Quản Lý XNK</h2>
-        <ul class="nav flex-column">
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyXNK" asp-action="Index" class="nav-link"><i class="fas fa-truck-loading me-2"></i> Quản lý Thu gom</a></li>
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyDSPX" asp-action="Index" class="nav-link "><i class="fas fa-dolly-flatbed me-2"></i> DS Phiếu Xuất</a></li> @* Link mới *@
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="QuanLyDSPX" asp-action="Create" class="nav-link"><i class="fas fa-plus-circle me-2"></i> Tạo Phiếu Xuất</a></li> @* Link mới *@
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="KhoHang" asp-action="Index" class="nav-link"><i class="fas fa-warehouse me-2"></i> DS Kho hàng</a></li>
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="TonKho" asp-action="Index" class="nav-link active"><i class="fas fa-boxes-stacked me-2"></i> Tồn kho SP</a></li>
-            <li class="nav-item"><a asp-area="QuanLyXNK" asp-controller="ThongKe" asp-action="Index" class="nav-link"><i class="fas fa-chart-bar me-2"></i> Thống kê NX</a></li>
-        </ul>
-        <div class="nav-item mt-auto ">
-            <button type="submit" class="text-danger border-0 bg-transparent p-0 w-100 text-start mt-1">
-                @* Adjusted button style to better match list items *@
-                <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
-            </button>
-        </div>
-    </div>
+    @await Html.PartialAsync("~/Areas/QuanLyXNK/Views/Shared/_QuanLyXNKSidebar.cshtml")
 
     @* --- MAIN CONTENT --- *@
     <div class="main-content-area">

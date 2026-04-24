@@ -1,0 +1,25 @@
+@{
+    var currentArea = ViewContext.RouteData.Values["Area"]?.ToString() ?? string.Empty;
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+
+    var isOrderActive = currentArea.Equals("QuanLyDH", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyDH", StringComparison.OrdinalIgnoreCase);
+
+    var isPaymentActive = currentArea.Equals("QuanLyDH", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyThanhToan", StringComparison.OrdinalIgnoreCase);
+
+    var isDataActive = currentArea.Equals("QuanLyDH", StringComparison.OrdinalIgnoreCase)
+        && currentController.Equals("QuanLyData", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="sidebar">
+    <h2>Quản lý đơn hàng</h2>
+    <ul class="nav flex-column">
+        <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyDH" asp-action="Index" class="nav-link @(isOrderActive ? "active" : string.Empty)"><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
+        <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link @(isPaymentActive ? "active" : string.Empty)"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh Toán</a></li>
+        <li class="nav-item"><a asp-area="QuanLyDH" asp-controller="QuanLyData" asp-action="PublicTrace" class="nav-link @(isDataActive ? "active" : string.Empty)"><i class="fas fa-link me-2"></i> Quản lý Data</a></li>
+    </ul>
+    <div class="nav-item mt-auto">
+        <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
+    </div>
+</div>

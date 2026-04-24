@@ -91,7 +91,7 @@ namespace DACS.Controllers
             if (errorMessages.Any())
             {
                 ViewBag.CartErrors = errorMessages;
-                return View("Index", cart); // Trả về trang giỏ hàng kèm lỗi
+                return View("Checkout", order); // Trả về trang Checkout kèm lỗi, giữ nguyên dữ liệu form
             }
 
             // (Phần logic tạo Đơn Hàng, Vận Đơn, Chi Tiết của bạn đã ổn, giữ nguyên)
@@ -412,7 +412,19 @@ namespace DACS.Controllers
                 return RedirectToAction("Index", "Home");
             }
 
-            AddProductToSessionCart(product, khoiluong);
+            // Xóa item cũ (nếu có) rồi thêm lại với đúng khối lượng mới (SET, không cộng dồn)
+            var cart = HttpContext.Session.GetObjectFromJson<ShoppingCart>("Cart") ?? new ShoppingCart();
+            cart.RemoveItem(productId);
+            var cartItem = new CartItem
+            {
+                ProductId = product.M_SanPham,
+                Name = product.TenSanPham,
+                Price = product.Gia,
+                Quantity = 1,
+                Khoiluong = khoiluong > 0 ? khoiluong : 1
+            };
+            cart.AddItem(cartItem);
+            HttpContext.Session.SetObjectAsJson("Cart", cart);
             return RedirectToAction(nameof(Checkout));
         }
 

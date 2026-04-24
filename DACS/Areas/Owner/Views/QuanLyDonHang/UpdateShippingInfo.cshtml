@@ -28,6 +28,12 @@
             flex-direction: row;
         }
 
+        .owner-layout {
+            width: 100%;
+            min-height: 100vh;
+            align-items: stretch;
+        }
+
         .sidebar {
             background-color: #212529;
             color: #fff;
@@ -164,28 +170,9 @@
 <body>
 
     @* --- Main Layout Container --- *@
-    <div class="d-flex">
+    <div class="d-flex owner-layout">
         @* --- Sidebar --- *@
-        <div class="sidebar">
-            <h2>OWNER</h2>
-            <ul class="nav flex-column">
-                @* Điều chỉnh các asp-controller và asp-action cho phù hợp với cấu trúc của bạn *@
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLyDonHang" asp-action="Index" class="nav-link"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="DoanhThu" asp-action="Index" class="nav-link"><i class="fas fa-chart-line me-2"></i> Doanh thu</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLyND" asp-action="Index" class="nav-link"><i class="fas fa-users me-2"></i> Quản lý Tài khoản</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLySP" asp-action="Index" class="nav-link"><i class="fas fa-box-open me-2"></i> Quản lý Sản phẩm</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLyXNK" asp-action="Index" class="nav-link"><i class="fas fa-truck-loading me-2"></i> Quản lý Thu gom</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLyDonHang" asp-action="Index" class="nav-link active"><i class="fas fa-receipt me-2"></i> Quản lý Đơn Hàng</a></li>
-                <li class="nav-item"><a area="Owner" asp-controller="QuanLyThanhToan" asp-action="Index" class="nav-link"><i class="fas fa-credit-card me-2"></i> Quản lý Thanh toán</a></li>
-                
-            </ul>
-            <div class="nav-item mt-auto ">
-                <button type="submit" class="text-danger border-0 bg-transparent p-0 w-100 text-start mt-1">
-                    @* Adjusted button style to better match list items *@
-                    <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
-                </button>
-            </div>
-        </div>
+        @await Html.PartialAsync("~/Areas/Owner/Views/Shared/_OwnerSidebar.cshtml")
 
         <div class="main-content-area">
             <div class="page-header">@ViewData["Title"]</div>

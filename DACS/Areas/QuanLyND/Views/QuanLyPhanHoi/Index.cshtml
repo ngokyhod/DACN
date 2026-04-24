@@ -116,22 +116,7 @@
 </head>
 <body>
     <div class="d-flex">
-        <div class="sidebar">
-            <h4>Quản Lý ND</h4>
-            <ul class="nav flex-column">
-                @* Set the correct 'active' class based on the current page/controller *@
-                <li class="nav-item"><a asp-area="QuanlyND" asp-controller="QuanlyND" asp-action="Index" class="nav-link "><i class="fas fa-users me-2"></i> Quản lý Tài khoản</a></li>
-				<li class="nav-item"><a asp-area="QuanlyND" asp-controller="QuanlyPhanHoi" asp-action="Index" class="nav-link active"><i class="fas fa-comments me-2"></i> Phản hồi & Đánh giá</a></li>
-                <li class="nav-item"><a asp-area="QuanlyND" asp-controller="QuanlyHoTro" asp-action="Index" class="nav-link"><i class="fas fa-headset me-2"></i> Live Chat</a></li>
-                @* Add other links as needed *@
-            </ul>
-            <div class="nav-item mt-auto ">
-                <button type="submit" class="text-danger border-0 bg-transparent p-0 w-100 text-start mt-1">
-                    @* Adjusted button style to better match list items *@
-                    <a href="/home/index" class="border-0 text-danger" style="text-decoration: none;"><i class="fas fa-sign-out-alt fa-fw me-2"></i> Về trang chủ</a>
-                </button>
-            </div>
-        </div>
+        @await Html.PartialAsync("~/Areas/QuanLyND/Views/Shared/_QuanLyNDSidebar.cshtml")
 
         <div class="main-content flex-grow-1">
             <h2 class="mb-4">Quản lý Phản hồi và Đánh giá</h2>
