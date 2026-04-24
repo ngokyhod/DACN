@@ -1,18 +1,19 @@
-﻿using DACS.Controllers;
+﻿using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using DACS.Controllers;
 using DACS.Models;
 using DACS.Repositories;
 using DACS.Repository;
 using DACS.Services;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Nethereum.Contracts.Standards.ENS;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Nethereum.Contracts.Standards.ENS;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,6 +96,12 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
 }
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "Services", "AI_Engine", "KnowledgeBase")),
+    RequestPath = "/pdfs" // Đặt tên ảo cho đường dẫn trên Web
+});
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("AllowAll");

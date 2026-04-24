@@ -58,7 +58,10 @@ namespace DACS.Controllers
         }
 
 
-
+        public IActionResult ExpertAI()
+        {
+            return View();
+        }
         public async Task<IActionResult> Index()
         {
             // Lấy 4 sản phẩm mới nhất để hiển thị ra trang chủ
