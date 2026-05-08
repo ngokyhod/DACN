@@ -37,7 +37,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 DB_PATH = "./faiss_db_local"
 DB_CONNECTION_STRING = "mssql+pyodbc://HOA230969\\SQLEXPRESS/QuanLyPhuPham?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes&TrustServerCertificate=yes"
 
-print("⏳ Đang khởi động Server AI (BẢN FIX LỖI MẤT BUTTON SUGGESTION)...")
+print("⏳ Đang khởi động Server AI với QWEN 2.5 (BẢN FIX LỖI MẤT DỮ LIỆU TÊN FILE)...")
 
 # --- GLOBAL VARIABLES ---
 vector_db = None
@@ -150,14 +150,16 @@ def get_history_from_sql(session_id: str, limit: int = 4):
 # ==============================================================================
 if os.path.exists(DB_PATH):
     try:
-        embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        embedding_model = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
         vector_db = FAISS.load_local(DB_PATH, embedding_model, allow_dangerous_deserialization=True)
         docs_list = list(vector_db.docstore._dict.values())
         def tokenize(text: str): return re.findall(r"\w+", text.lower())
         bm25_corpus = [tokenize(doc.page_content) for doc in docs_list]
         bm25 = BM25Okapi(bm25_corpus)
-        reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        llm = ChatOllama(model="llama3.1:8b", temperature=0) 
+        
+        # [ĐÃ ĐỔI SANG QWEN 2.5] - Model xuất sắc nhất cho đọc hiểu số liệu và PDF
+        llm = ChatOllama(model="qwen2.5:7b", temperature=0) 
+        
         sql_engine = create_engine(DB_CONNECTION_STRING)
         print("✅ Kết nối SQL và FAISS thành công!")
         preload_cache_from_sql()
@@ -218,104 +220,91 @@ def query_warehouses():
         return "[[[ DỮ LIỆU KHO HÀNG TỪ SQL (DÙNG ĐỂ TƯ VẤN LƯU TRỮ/GỬI HÀNG CHO KHÁCH) ]]]\n" + "\n".join(final_result) + "\n"
     except: return ""
 
-def hybrid_search_multi(queries: list, k: int = 2):
+def hybrid_search_multi(queries: list, k: int = 5):
     try:
         all_candidates = []
         for q in queries:
             tokenized = tokenize(q)
             bm25_scores = bm25.get_scores(tokenized)
-            bm25_docs = [docs_list[i] for i in sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:k*2]]
-            vector_docs = vector_db.similarity_search(q, k=k*2)
+            bm25_docs = [docs_list[i] for i in sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:k]]
+            vector_docs = vector_db.similarity_search(q, k=k)
             all_candidates.extend(vector_docs + bm25_docs)
 
         unique_docs = list({d.page_content: d for d in all_candidates}.values())
-        if not unique_docs: return []
-        
-        main_query = queries[0]
-        pairs = [[main_query, d.page_content] for d in unique_docs]
-        scores = reranker.predict(pairs)
-        
-        sorted_docs = [d for s, d in sorted(zip(scores, unique_docs), key=lambda x: x[0], reverse=True)]
-        
-        final_docs = []
-        for doc in sorted_docs:
-            is_dup = False
-            for f_doc in final_docs:
-                if doc.page_content[:60] in f_doc.page_content or f_doc.page_content[:60] in doc.page_content:
-                    is_dup = True
-                    break
-            if not is_dup:
-                final_docs.append(doc)
-            if len(final_docs) >= k:
-                break
-                
-        return final_docs
-    except: return []
+        return unique_docs[:k+2]
+    except Exception as e: 
+        return []
 
 # ==============================================================================
 # EXTRACTOR JSON
 # ==============================================================================
+# [ĐÃ SỬA] Thêm Mapping tiếng Anh chuẩn xác cho 6 loại phụ phẩm để FAISS bốc đúng file
 extractor_system = """Nhiệm vụ: Phân tích câu hỏi người dùng.
-1. "products_to_buy": Tên sản phẩm khách muốn MUA (TUYỆT ĐỐI KHÔNG BAO GỒM CÁC TỪ CHỈ SỐ LƯỢNG NHƯ: kg, tấn, tạ, lít, 10, 100... Chỉ lấy đúng tên. VD: "100kg trấu nghiền" -> "trấu nghiền").
+1. "products_to_buy": Tên nông sản khách muốn MUA. TUYỆT ĐỐI KHÔNG đưa các hóa chất, thuật ngữ khoa học (như CO2, NaY, MEA, pt700, Lewatit...) vào mục này.
 2. "products_to_sell": Tên sản phẩm khách muốn BÁN chỉ lấy giá trong sql  (CŨNG TUYỆT ĐỐI KHÔNG LẤY SỐ LƯỢNG).
 3. ĐÁNH DẤU GET_ALL: Nếu hỏi "bao nhiêu sản phẩm", "danh sách", "tất cả mặt hàng", "mạt hang", "đồ bán" -> is_get_all = true.
 4. ĐÁNH DẤU TƯ VẤN KHO: Hỏi "kho nào", "gửi ở đâu" -> is_warehouse_query = true.
-5. MỞ RỘNG TỪ KHÓA (Synonym): Liệt kê thêm các từ đồng nghĩa, biến thể của sản phẩm vào "expanded_queries" (VD: "trấu" -> ["vỏ lúa", "vỏ trấu", "trấu tươi"]).
-6. ROUTE: Nếu khách CẦN HỎI ĐỊNH NGHĨA/CÔNG DỤNG thì xuất "rag". Nếu khách CHỈ HỎI GIÁ/MUA/BÁN/KHO thì xuất "sql". Nếu hỏi hỗn hợp cả hai thì xuất "both".
+5. DỊCH VÀ MỞ RỘNG TỪ KHÓA (RẤT QUAN TRỌNG): Tài liệu PDF 100% là Tiếng Anh. Bạn BẮT BUỘC phải dịch chính xác các danh từ trong câu hỏi sang Tiếng Anh chuyên ngành.
+   ĐẶC BIỆT chú ý các loại phụ phẩm sau để FAISS tìm đúng file:
+   - Hỏi về "Sắn / Khoai mì / Rơm mì" -> Thêm: "cassava", "cassava peel", "manihot esculenta", "cassava ethanol"
+   - Hỏi về "Bã mía" -> Thêm: "sugarcane bagasse", "bagasse biochar", "bagasse ash"
+   - Hỏi về "Gỗ / Mùn cưa / Giấm gỗ" -> Thêm: "wood pellets", "wood vinegar", "forestry residue"
+   - Hỏi về "Bắp / Ngô / Lõi ngô" -> Thêm: "maize", "corn stover", "fermented corn cob", "maize silage"
+   - Hỏi về "Xơ dừa / Mụn dừa" -> Thêm: "coconut coir", "coir pith", "vermicomposting coir"
+   - Hỏi về "Vỏ cà phê" -> Thêm: "coffee husk", "coffee husk biochar"
+6. ROUTE: Nếu khách CẦN HỎI ĐỊNH NGHĨA/CÔNG DỤNG/THÔNG SỐ thì xuất "rag". Nếu khách CHỈ HỎI GIÁ/MUA/BÁN/KHO thì xuất "sql". Nếu hỏi hỗn hợp cả hai thì xuất "both".
 
 Output JSON:
 {{
-    "route": "sql/rag/both",
+    "route": "both", 
     "products_to_buy": ["tên sp"],
     "products_to_sell": ["tên sp"],
     "is_get_all": false,
     "is_warehouse_query": false,
-    "expanded_queries": ["từ đồng nghĩa 1"]
-}}"""
+    "expanded_queries": ["english keyword 1", "english keyword 2", "english keyword 3"]
+}}
+LƯU Ý: Trường "route" CHỈ ĐƯỢC PHÉP trả về 1 trong 3 chuỗi chính xác: "sql", "rag", hoặc "both"."""
 extractor_chain = ChatPromptTemplate.from_messages([("system", extractor_system), ("human", "{input}")]) | llm | JsonOutputParser()
 
 # ==============================================================================
-# PROMPT GỐC CỦA BẠN (ĐÃ FIX LỖI ÉP BUỘC NGOẶC VUÔNG SUGGESTION)
+# PROMPT ĐÃ ĐƯỢC CẬP NHẬT LUẬT ĐỌC TÊN FILE & CHỐNG LỖI ROUTING
 # ==============================================================================
-qa_system_prompt = """Bạn là Chuyên viên Tư vấn & Bán hàng xuất sắc của website Thu Gom Phụ Phẩm Nông Nghiệp. 
+# [ĐĐÃ SỬA] Ép AI nhận lỗi nếu không có số liệu, Cấm lấy hóa đơn đắp vào khoa học
+qa_system_prompt = """Bạn là Chuyên gia Kỹ thuật Vật liệu kiêm Chuyên viên Tư vấn & Bán hàng xuất sắc của website Thu Gom Phụ Phẩm Nông Nghiệp. 
 
-🛑 LỆNH TỐI CAO CHỐNG ẢO GIÁC:
-1. Bạn KHÔNG ĐƯỢC PHÉP bịa đặt thông tin. Nếu trong DỮ LIỆU CỦA BẠN bên dưới không có thông tin về sản phẩm khách hỏi, BẮT BUỘC trả lời: "Xin lỗi, hiện tại hệ thống chưa có dữ liệu về thông tin này." (Ngoại trừ trường hợp khách muốn BÁN sản phẩm, hãy luôn sử dụng DỮ LIỆU THU GOM để tư vấn).
-2. TUYỆT ĐỐI KHÔNG lấy định nghĩa của sản phẩm này đắp vào sản phẩm khác. 
-3. Nếu câu hỏi không liên quan đến nông nghiệp hoặc kho bãi → Trả lời: "Câu hỏi ngoài phạm vi dữ liệu."
+🛑 LỆNH TỐI CAO (CHỐNG ẢO GIÁC & TĂNG TỐC):
+1. BẮT BUỘC TRÍCH XUẤT SỐ LIỆU THÔ: Nếu câu hỏi yêu cầu con số (nhiệt độ, thời gian, tỷ lệ, mAh/g, %, mô hình AI), bạn phải tìm ĐÚNG con số đó trong DỮ LIỆU CỦA BẠN. 
+   - Nếu không thấy con số/phương pháp chính xác trong văn bản: BẮT BUỘC trả lời "Thông tin trong tài liệu không đề cập", TUYỆT ĐỐI KHÔNG tự ý ước lượng hay bịa ra số.
+2. Bạn KHÔNG ĐƯỢC PHÉP bịa đặt thông tin. TUYỆT ĐỐI KHÔNG lấy định nghĩa của sản phẩm này đắp vào sản phẩm khác. 
+3. Nếu câu hỏi không liên quan đến nông nghiệp, kho bãi, hoặc ỨNG DỤNG CÔNG NGHỆ CAO CỦA PHỤ PHẨM (pin, vật liệu...) → Trả lời: "Câu hỏi ngoài phạm vi dữ liệu."
+4. TÁCH BIỆT RAG VÀ SQL: TUYỆT ĐỐI KHÔNG sử dụng logic tính toán hóa đơn (nhân đơn giá) hoặc kịch bản bán hàng cho các câu hỏi về định nghĩa, thông số khoa học (RAG). Với các câu hỏi khoa học, chỉ giải thích cơ chế và trích xuất đúng đơn vị trong tài liệu.
+5. XỬ LÝ XUNG ĐỘT DỮ LIỆU (QUAN TRỌNG): Nếu DỮ LIỆU CỦA BẠN chứa nhiều thông số khác nhau cho cùng một câu hỏi từ các file khác nhau (Ví dụ: file Bagasse báo nhiệt độ 1000, file Wood báo nhiệt độ 600), BẮT BUỘC bạn phải LIỆT KÊ TẤT CẢ và ghi rõ số liệu nào thuộc về file/ứng dụng nào. TUYỆT ĐỐI KHÔNG tự ý chọn một số duy nhất để trả lời.
 
 ⚠️ QUY TẮC BẮT BUỘC:
-- Chỉ được sử dụng thông tin trong phần "Thông tin tham khảo" bên dưới.
-- Không được dùng kiến thức bên ngoài.
-- Nếu câu hỏi không liên quan đến nông nghiệp → trả lời: "Câu hỏi ngoài phạm vi dữ liệu".
-- Nếu chỉ hỏi về 1 chủ đề thì chỉ xem tài liệu của 1 chủ đề đó đùng lấn át sang chủ đề khác nếu nó không có liên quan gì đến nhau.
-
-⚠️ NGÔN NGỮ & ĐỊNH DẠNG:
-- Trả lời 100% tiếng Việt.
-- Trình bày bằng Markdown, gạch đầu dòng (-) rõ ràng, dễ đọc.
+- Chỉ được sử dụng thông tin trong phần "DỮ LIỆU CỦA BẠN" bên dưới. Không dùng kiến thức bên ngoài.
+- Trả lời 100% tiếng Việt. Tự tin trả lời kiến thức chuyên sâu, giữ nguyên ký hiệu khoa học (PT700, MIE, mAh/g...).
+- Trả lời NGẮN GỌN, đi thẳng vào vấn đề để tiết kiệm thời gian xử lý. Trình bày bằng Markdown, gạch đầu dòng (-).
 
 BẠN CÓ 2 NGUỒN TÀI LIỆU DƯỚI ĐÂY:
 1. [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]]: Chứa Đơn giá và Tồn kho thực tế.
-2. [[[ KIẾN THỨC TỪ PDF ]]]: Chứa định nghĩa, công dụng, cách làm.
+2. [[[ KIẾN THỨC TỪ PDF/FAO ]]]: Chứa định nghĩa, công dụng, THÔNG SỐ KHOA HỌC CHUYÊN SÂU và SỐ LIỆU SẢN LƯỢNG.
 
-❗ QUY TẮC CỰC KỲ QUAN TRỌNG:
-- Mỗi mục "Thông tin về X" CHỈ được dùng để nói về X.
-- TUYỆT ĐỐI KHÔNG suy diễn rằng sản phẩm này làm từ sản phẩm kia. TUYỆT ĐỐI KHÔNG lấy định nghĩa của sản phẩm này đắp vào sản phẩm khác. 
+❗ QUY TẮC PHÂN LOẠI TỪ TÊN FILE [Thông tin từ file: ...]:
+- "Ground" hoặc "Dust": Trấu nghiền / Bụi trấu (an toàn cháy nổ, logistics).
+- "Battery", "Supercapacitor", "Zinc": Ứng dụng công nghệ cao (Làm pin, tụ điện).
+- "Concrete", "Cement": Xây dựng.
+- BẠN PHẢI dựa vào tên file để tư vấn ĐÚNG CHUYÊN MÔN. Không lấy số liệu của "Trấu nghiền" tư vấn cho "Pin".
 
 ✅ CÁCH TRẢ LỜI CHO TỪNG TRƯỜNG HỢP:
-1. BÁO GIÁ KHI KHÁCH MUA VÀ TỒN KHO: Bạn LẤY CÁC CON SỐ nằm trong mục [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]] (nếu có). TUYỆT ĐỐI KHÔNG lấy giá/tỉ lệ % từ Mục PDF. Không được in ra cái tên thẻ [[[ DỮ LIỆU... ]]] này.
-2. DANH SÁCH SẢN PHẨM: Nếu người dùng hỏi có bao nhiêu sản phẩm, hãy liệt kê dựa trên dữ liệu từ SQL cung cấp.3. KHÁCH MUỐN BÁN CHO HỆ THỐNG: Nếu khách hỏi "tôi muốn bán...", "bán được bao nhiêu", BẠN TUYỆT ĐỐI KHÔNG DÙNG GIÁ TRONG SQL ĐỂ TRẢ LỜI. Bạn BẮT BUỘC trả lời tư vấn như sau: "Giá thu mua phụ phẩm (như trấu, vỏ cà phê...) sẽ thay đổi tùy thuộc vào độ ẩm, tạp chất và chất lượng thực tế của sản phẩm. Để biết chính xác giá thu mua, quý khách vui lòng truy cập vào trang **Thu Gom** trên hệ thống của chúng tôi. Tại đó sẽ có AI chuyên biệt phân tích và định giá chính xác lô hàng của quý khách."
-4. TƯ VẤN SẢN PHẨM: Bạn hãy đọc nội dung nằm trong mục [[[ KIẾN THỨC TỪ PDF ]]] (nếu có) để tư vấn "Nó là gì", "Dùng để làm gì". Chú ý xem kỹ thẻ [Thông tin từ file: ...] ở mỗi đoạn văn để biết nội dung đó thuộc sản phẩm nào.
-5. TƯ VẤN KHO CHỨA HÀNG: Nếu khách có nhu cầu gửi hàng/lưu trữ (ví dụ "tôi có 50 tấn... kho nào hợp"), HÃY XEM MỤC [[[ DỮ LIỆU KHO HÀNG TỪ SQL ]]]. Chọn và gợi ý 1-2 kho có Trạng thái "Còn trống", Sức chứa đáp ứng đủ nhu cầu của họ và ghi rõ địa chỉ để khách đem tới.
-6. KÊU GỌI HÀNH ĐỘNG: Nếu khách mua hàng, luôn kêu gọi khách "Thêm vào giỏ hàng" hoặc "Mua trên website".
-7. VĂN PHONG: Chuyên nghiệp, ngắn gọn.
-✅ CÁCH TRẢ LỜI:
-- Để báo GIÁ BÁN và số lượng TỒN KHO, bạn phải LẤY CÁC CON SỐ nằm trong mục [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]] (nếu có). Không được in ra cái tên thẻ này.
-- Để tư vấn CÔNG DỤNG, bạn hãy đọc nội dung nằm trong mục [[[ KIẾN THỨC TỪ PDF ]]] (nếu có).
-- Để tư vấn KHO BÃI, hãy tìm các kho đang "Còn trống" trong mục [[[ DỮ LIỆU KHO HÀNG TỪ SQL ]]] để gợi ý.
-- Cuối câu trả lời, luôn kêu gọi khách "Thêm vào giỏ hàng" hoặc "Mua trên website".
-Sau khi trả lời xong, BẮT BUỘC tạo 3 câu hỏi ngắn gọn để gợi ý cho người dùng.
-Để hệ thống web tạo thành Button, bạn PHẢI in các câu gợi ý này ở phần CUỐI CÙNG của câu trả lời, sử dụng CHÍNH XÁC định dạng thẻ [SUGGESTION] như sau:
+1. BÁO GIÁ KHI KHÁCH MUA VÀ TỒN KHO: Lấy CÁC CON SỐ từ mục [[[ DỮ LIỆU SỐ LIỆU TỪ SQL ]]]. Không in tên thẻ ra.
+2. DANH SÁCH SẢN PHẨM: Liệt kê dựa trên dữ liệu từ SQL.
+3. KHÁCH MUỐN BÁN: BẮT BUỘC trả lời: "Giá thu mua phụ phẩm sẽ thay đổi tùy thuộc vào độ ẩm, tạp chất và chất lượng. Quý khách vui lòng truy cập trang **Thu Gom** trên hệ thống để AI phân tích và định giá." (KHÔNG DÙNG GIÁ SQL ĐỂ TRẢ LỜI MỤC NÀY).
+4. TƯ VẤN SẢN PHẨM & KHOA HỌC: Đọc mục [[[ KIẾN THỨC TỪ PDF/FAO ]]]. Trích xuất chính xác thông số kỹ thuật chuyên sâu. Chú ý đối chiếu tên file.
+5. TƯ VẤN KHO CHỨA HÀNG: Xem mục [[[ DỮ LIỆU KHO HÀNG TỪ SQL ]]], chọn kho "Còn trống" và đủ sức chứa.
+6. KÊU GỌI HÀNH ĐỘNG: Luôn kêu gọi "Thêm vào giỏ hàng" hoặc "Mua trên website" ở cuối.
+7. TỔNG SẢN LƯỢNG QUỐC GIA: Ghi rõ "Đây là số liệu ước tính quy đổi từ báo cáo thống kê của tổ chức FAOSTAT".
+
+Sau khi trả lời xong, BẮT BUỘC tạo 3 câu hỏi ngắn gọn để gợi ý cho người dùng. PHẢI in ở CUỐI CÙNG, sử dụng CHÍNH XÁC định dạng thẻ [SUGGESTION]:
 [SUGGESTION] Gợi ý câu hỏi 1
 [SUGGESTION] Gợi ý câu hỏi 2
 [SUGGESTION] Gợi ý câu hỏi 3
@@ -373,6 +362,11 @@ async def node_extract_intent(state: AgentState):
     try:
         ext = await extractor_chain.ainvoke({"input": q})
         route_val = ext.get("route", "both")
+        
+        # [BỔ SUNG KHÓA AN TOÀN CHỐNG SẬP GRAPH]
+        if route_val not in ["sql", "rag", "both"]:
+            route_val = "both"
+            
         b = ext.get("products_to_buy", [])
         s = ext.get("products_to_sell", [])
         p_buy = [b] if isinstance(b, str) else b
@@ -387,13 +381,22 @@ async def node_extract_intent(state: AgentState):
     if any(k in q.lower() for k in ["muốn bán", "tôi bán", "bán được", "thu mua"]): selling = True
     if any(k in q.lower() for k in ["tất cả", "danh sách", "có những loại nào", "liệt kê", "mặt hàng", "mạt hang", "đồ bán trong cửa hàng", "đồ bán trong của hàng"]): get_all = True
     
-    all_p = list(set(p_buy + p_sell))
-    if not all_p and not get_all:
-        clean = q.lower().replace("giá", "").replace("của", "").replace("bao nhiêu", "").replace("mua", "").replace("ở đâu", "").replace("là gì", "").replace("?", "").replace(".", "").strip()
-        p_buy = [p.strip() for p in clean.split(" và ") if p.strip()]
+    # [ĐÃ SỬA] Đảm bảo các câu hỏi về thông số kỹ thuật bị khóa cứng chuyển sang RAG
+    is_science = any(term in q.lower() for term in ["là gì", "định nghĩa", "khái niệm", "nhiệt độ", "chu kỳ", "dung lượng", "năng lượng", "mô hình", "hiệu suất", "so sánh", "tại sao", "mea", "nay", "lewatit"])
+    
+    if is_science:
+        route_val = "rag"
+        get_all = False
+        p_buy = []
+        p_sell = []
+    else:
+        all_p = list(set(p_buy + p_sell))
+        if not all_p and not get_all:
+            clean = q.lower().replace("giá", "").replace("của", "").replace("bao nhiêu", "").replace("mua", "").replace("ở đâu", "").replace("là gì", "").replace("?", "").replace(".", "").strip()
+            p_buy = [p.strip() for p in clean.split(" và ") if p.strip()]
 
-    if selling or get_all or warehouse or p_buy:
-        if route_val == "rag": route_val = "both"
+        if selling or get_all or warehouse or p_buy:
+            if route_val == "rag": route_val = "both"
 
     return {
         "route": route_val,
@@ -410,7 +413,7 @@ async def node_retrieve_sql(state: AgentState):
     sources = state.get("source_display", [])
     msg = []
     
-    if state["is_selling"]: msg.append(f"<div class='ai-status'>🤝 Đang phân tích thông tin giao dịch...</div>\n")
+    if state["is_selling"]: msg.append(f"<div class='ai-status'>🤝 Đang phân tích thông vị giao dịch...</div>\n")
     
     synonyms = [kw for kw in state["queries_to_search"] if kw != state["question"]]
     all_p = list(set(state["products_to_buy"] + state["products_to_sell"] + synonyms))
@@ -452,34 +455,36 @@ async def node_retrieve_pdf(state: AgentState):
     if state["is_get_all"] and not all_p:
         pass 
     else:
-        msg.append(f"<div class='ai-status'>📚 AI đang tìm định nghĩa từ kho PDF...</div>\n")
-        docs = await asyncio.to_thread(hybrid_search_multi, state["queries_to_search"], 2)
+        msg.append(f"<div class='ai-status'>📚 AI đang quét tài liệu chuyên sâu...</div>\n")
+        
+        docs = await asyncio.to_thread(hybrid_search_multi, state["queries_to_search"], 5)
         if docs:
             rag_texts, links = [], []
             for doc in docs:
                 f_name = os.path.basename(doc.metadata.get("source_file", "Tài liệu"))
-                is_valid = False
-                if not all_p: is_valid = True
-                else:
-                    for p in all_p:
-                        if p.lower() in f_name.lower(): is_valid = True
-                if is_valid:
-                    rag_texts.append(f"📦 [Thông tin từ file: {f_name}]:\n{doc.page_content}")
-                    p_num = doc.metadata.get("page_label", "1")
-                    
-                    source_text = f"📄 **{f_name}** (Trang {p_num})"
-                    if source_text not in links: links.append(source_text)
+                p_num = doc.metadata.get("page_label", "1")
+                
+                # GỘP TẤT CẢ VĂN BẢN (KHÔNG CHẶN FILE NỮA)
+                rag_texts.append(f"📦 [Thông tin từ file: {f_name}]:\n{doc.page_content}")
+                
+                source_text = f"📄 **{f_name}** (Trang {p_num})"
+                if source_text not in links: links.append(source_text)
             
-            if rag_texts: rag_ctx = "[[[ KIẾN THỨC TỪ PDF ]]]\n" + "\n\n".join(rag_texts)
-            if links: sources.extend(links)
+            if rag_texts: 
+                rag_ctx = "[[[ KIẾN THỨC TỪ PDF ]]]\n" + "\n\n".join(rag_texts)
+                sources.extend(links)
             
     return {"rag_context": rag_ctx, "source_display": sources, "status_messages": msg}
 
 async def node_prepare_prompt(state: AgentState):
     q = state["question"]
     math_instruction = ""
-    if any(char.isdigit() for char in q) or state["is_get_all"]:
-        math_instruction = " [LƯU Ý: NẾU KHÁCH HỎI MUA VỚI SỐ LƯỢNG CỤ THỂ (VD: 100kg), BẠN PHẢI LÀM TOÁN NHÂN: Lấy ĐÚNG con số khách yêu cầu NHÂN VỚI [Đơn giá/1kg từ SQL]. TUYỆT ĐỐI KHÔNG tự quy đổi đơn vị. Ghi rõ phép tính (Ví dụ: 100 x 80000 = 8000000 VNĐ) và tính tổng chi phí.]"
+    
+    # [ĐÃ SỬA] Chỉ kích hoạt tính toán hóa đơn khi khách THỰC SỰ MUỐN MUA VÀ KHÔNG HỎI KHOA HỌC
+    is_science = any(term in q.lower() for term in ["nhiệt độ", "chu kỳ", "dung lượng", "năng lượng", "mô hình", "hiệu suất", "so sánh", "tại sao", "mea", "nay", "lewatit"])
+    
+    if not is_science and state["products_to_buy"] and any(char.isdigit() for char in q):
+        math_instruction = " [LƯU Ý: Đây là yêu cầu MUA HÀNG. Hãy lấy đúng số lượng khách yêu cầu nhân với đơn giá từ SQL.]"
 
     final_q = q
     if state["is_selling"]:

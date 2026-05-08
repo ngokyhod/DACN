@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <Folder Include="PTTT\" />
+    <Folder Include="Services\AI_Engine\faiss_db_local\" />
     <Folder Include="Services\AI_Engine\KnowledgeBase\ReferenceImages\" />
   </ItemGroup>
 

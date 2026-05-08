@@ -38,18 +38,54 @@ public class FirebaseSyncService
                 EmailVerified = false,
                 Password = password,
                 DisplayName = displayName,
-                PhoneNumber = phoneNumber, // Lưu ý: SĐT phải chuẩn E.164 (+84...)
-                Disabled = false,
-                PhotoUrl = null,
-                
+                Disabled = false
             };
 
+            // CHỈ gán số điện thoại nếu nó không rỗng (Tránh lỗi invalid-phone-number)
+            if (!string.IsNullOrEmpty(phoneNumber))
+            {
+                userArgs.PhoneNumber = phoneNumber;
+            }
+
+            // 1. Cố gắng tạo user mới
             UserRecord userRecord = await FirebaseAuth.DefaultInstance.CreateUserAsync(userArgs);
-            return userRecord.Uid; // Trả về UID để lưu vào SQL
+            return userRecord.Uid;
         }
         catch (FirebaseAuthException ex)
         {
-            // Xử lý lỗi (ví dụ: Email đã tồn tại trên Firebase)
+            // 2. NẾU LỖI DO TÀI KHOẢN ĐÃ TỒN TẠI TRÊN FIREBASE
+            // Chúng ta không cho code chết, mà sẽ đi TÌM tài khoản đó để lấy UID
+            Console.WriteLine($"[Firebase Auth Exception]: {ex.Message}");
+
+            try
+            {
+                // Tìm user theo Email
+                UserRecord existingUser = await FirebaseAuth.DefaultInstance.GetUserByEmailAsync(email);
+
+                if (existingUser != null)
+                {
+                    Console.WriteLine($"[Firebase] Tái sử dụng tài khoản đã có sẵn UID: {existingUser.Uid}");
+
+                    // (Tùy chọn) Cập nhật lại mật khẩu cho đồng bộ với SQL nếu muốn
+                    /*
+                    var updateArgs = new UserRecordArgs() { Uid = existingUser.Uid, Password = password };
+                    await FirebaseAuth.DefaultInstance.UpdateUserAsync(updateArgs);
+                    */
+
+                    return existingUser.Uid; // Trả về UID cũ để SQL lưu bình thường
+                }
+            }
+            catch (Exception fallbackEx)
+            {
+                Console.WriteLine($"[Firebase Fallback Error]: {fallbackEx.Message}");
+                // Nếu vẫn không tìm thấy, nguyên nhân có thể do trùng Số điện thoại chứ không phải trùng Email
+            }
+
+            return null; // Trả về null để bên Register.cshtml.cs bắt lỗi
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Lỗi Hệ Thống]: {ex.Message}");
             return null;
         }
     }

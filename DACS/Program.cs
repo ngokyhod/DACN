@@ -84,6 +84,10 @@ builder.Services.AddTransient<ISmsService, ESmsService>();
 builder.Services.AddScoped<FirebaseSyncService>();
 builder.Services.AddScoped<AIMatchingService>();
 builder.Services.AddHttpClient();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 52428800; // Cho phép gửi file lên tới 50MB
+});
 //builder.WebHost.UseUrls("http://0.0.0.0:5001");//chạy ebsite
 
 

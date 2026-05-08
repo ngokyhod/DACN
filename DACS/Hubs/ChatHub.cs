@@ -127,4 +127,45 @@ public class ChatHub : Hub
             sentTime = chat.SentTime.ToString("HH:mm")
         });
     }
+    public async Task SendMessageFromMobile(string firebaseUid, string senderName, string message = "", string? imageUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(message) && string.IsNullOrWhiteSpace(imageUrl))
+            return;
+
+        // 1. Lưu tin nhắn vào Database (Dùng chính cái UID đã đồng bộ)
+        var chat = new ChatMessage
+        {
+            SenderId = firebaseUid,
+            ReceiverId = "Admin",
+            SenderName = senderName,
+            Message = string.IsNullOrWhiteSpace(message) ? null : message,
+            ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? null : imageUrl,
+            IsFromAdmin = false,
+            SentTime = DateTime.Now
+        };
+
+        _context.ChatMessages.Add(chat);
+        await _context.SaveChangesAsync();
+
+        // 2. Báo cho các Admin đang mở Website biết có tin nhắn mới
+        await Clients.Group("Admins").SendAsync("ReceiveUserMessage", new
+        {
+            senderId = firebaseUid,
+            senderName,
+            message = chat.Message,
+            imageUrl = chat.ImageUrl,
+            sentTime = chat.SentTime.ToString("HH:mm")
+        });
+
+        // 3. Trả tín hiệu về lại cho Mobile để hiển thị tin nhắn lên màn hình
+        await Clients.Caller.SendAsync("ReceiveUserMessage", new
+        {
+            senderId = firebaseUid,
+            senderName,
+            message = chat.Message,
+            imageUrl = chat.ImageUrl,
+            sentTime = chat.SentTime.ToString("HH:mm")
+        });
+    }
+
 }

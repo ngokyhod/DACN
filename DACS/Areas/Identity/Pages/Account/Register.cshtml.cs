@@ -213,7 +213,19 @@ namespace DACS.Areas.Identity.Pages.Account
                                 MaTinh = "T00",
                                 MaQuan = "Q0100",
                                 MaXa = "X010100",
-                                DiaChi_DuongApThon = "chua cap nhat"
+                                DiaChi_DuongApThon = "chua cap nhat",
+                                LinhVucHoatDong = "null",
+                                NhuCauChinh = "null",
+                                TenDoanhNghiep = "null",
+                                DiaChiDoanhNghiep = "null",
+                                GiayPhepKinhDoanhUrl = "null",
+                                TinhThanhDoanhNghiep = "null",
+                                DiaChiDuongDoanhNghiep = "null",
+                                EnterpriseLat = 0,
+                                EnterpriseLng = 0,
+                                MaQuanDoanhNghiep = null,
+                                MaTinhDoanhNghiep = null,
+                                MaXaDoanhNghiep = null
                             };
                             // DÙNG DbContext TRỰC TIẾP
                             _context.KhachHangs.Add(nguoiMuaProfile);

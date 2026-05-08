@@ -17,13 +17,15 @@ namespace DACS.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly FirebaseSyncService _firebaseSync;
         private readonly BlockchainService _blockchainService;
+        private readonly IWebHostEnvironment _env;
         public MobileApiController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, FirebaseSyncService firebaseSync,
-            BlockchainService blockchainService)
+            BlockchainService blockchainService, IWebHostEnvironment env)
         {
             _context = context;
             _userManager = userManager;
             _firebaseSync = firebaseSync;
             _blockchainService = blockchainService;
+            _env = env;
         }
 
         // --- 1. DANH SÁCH SẢN PHẨM ---
@@ -273,6 +275,120 @@ namespace DACS.Controllers
             {
                 return BadRequest(new { message = "Lỗi lưu Database: " + ex.Message });
             }
+        }
+        [HttpPost("upload")]
+        [Consumes("multipart/form-data")] // QUAN TRỌNG: Để nhận file từ Flutter
+        public async Task<IActionResult> UploadImageMobile(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("File trống");
+
+                // Đường dẫn đến wwwroot/uploads
+                string uploadsFolder = Path.Combine(_env.WebRootPath, "uploads");
+                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+                string uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
+                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(fileStream);
+                }
+
+                // Trả về JSON chứa link ảnh
+                return Ok(new { imageUrl = "/uploads/" + uniqueFileName });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Lỗi server: {ex.Message}");
+            }
+        }
+        [HttpGet("orders/{firebaseUid}")]
+        public async Task<IActionResult> GetUserOrders(string firebaseUid)
+        {
+            if (string.IsNullOrEmpty(firebaseUid)) return BadRequest("Thiếu ID người dùng");
+
+            // BƯỚC 1: DÙNG FIREBASE UID ĐỂ TÌM MÃ KHÁCH HÀNG TRONG SQL
+            // *LƯU Ý: Thay KhachHangs và FirebaseId bằng tên bảng/cột thực tế của bạn*
+            var khachHang = await _context.KhachHangs
+                                          .FirstOrDefaultAsync(k => k.FirebaseID == firebaseUid);
+
+            // Nếu không tìm thấy khách hàng này trong SQL, trả về mảng rỗng luôn
+            if (khachHang == null) return Ok(new List<object>());
+
+            string maKhachHangThucTe = khachHang.M_KhachHang;
+
+            // BƯỚC 2: TÌM ĐƠN HÀNG DỰA TRÊN MÃ KHÁCH HÀNG ĐÃ TÌM ĐƯỢC
+            var orders = await _context.DonHangs
+                .Where(d => d.M_KhachHang == maKhachHangThucTe)
+                .OrderByDescending(d => d.NgayDat)
+                .Select(d => new
+                {
+                    maDonHang = d.M_DonHang,
+                    ngayDat = d.NgayDat,
+                    ngayGiao = d.NgayGiao,
+                    trangThai = d.TrangThai,
+                    trangThaiThanhToan = d.TrangThaiThanhToan,
+                    diaChiGiao = d.ShippingAddress
+                })
+                .ToListAsync();
+
+            return Ok(orders);
+        }
+
+        // 2. API LẤY DANH SÁCH YÊU CẦU THU GOM
+        [HttpGet("scrap-requests/{firebaseUid}")]
+        public async Task<IActionResult> GetScrapRequests(string firebaseUid)
+        {
+            if (string.IsNullOrEmpty(firebaseUid)) return BadRequest("Thiếu ID người dùng");
+
+            // BƯỚC 1: DÙNG FIREBASE UID ĐỂ TÌM MÃ KHÁCH HÀNG TRONG SQL
+            var khachHang = await _context.KhachHangs
+                                          .FirstOrDefaultAsync(k => k.FirebaseID == firebaseUid);
+
+            if (khachHang == null) return Ok(new List<object>());
+
+            string maKhachHangThucTe = khachHang.M_KhachHang;
+
+            // BƯỚC 2: TÌM YÊU CẦU THU GOM
+            var requests = await _context.YeuCauThuGoms
+                .Where(y => y.M_KhachHang == maKhachHangThucTe)
+                .OrderByDescending(y => y.NgayYeuCau)
+                .Select(y => new
+                {
+                    maYeuCau = y.M_YeuCau,
+                    ngayYeuCau = y.NgayYeuCau,
+                    trangThai = y.TrangThai,
+                    diaChi = y.DiaChi_DuongApThon,
+                    thoiGianSanSang = y.ThoiGianSanSang,
+                    ghiChu = y.GhiChu
+                })
+                .ToListAsync();
+
+            return Ok(requests);
+        }
+        [HttpGet("history/{userId}")]
+        public async Task<IActionResult> GetChatHistory(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return BadRequest("Thiếu ID người dùng"); // Bây giờ sẽ không báo lỗi nữa
+
+            // Tìm toàn bộ tin nhắn liên quan đến Khách hàng này
+            var messages = await _context.ChatMessages
+                .Where(m => m.SenderId == userId || m.ReceiverId == userId || m.M_KhachHang == userId)
+                .OrderBy(m => m.SentTime) // Sắp xếp theo thời gian cũ -> mới
+                .Select(m => new
+                {
+                    message = m.Message,
+                    imageUrl = m.ImageUrl,
+                    isFromAdmin = m.IsFromAdmin,
+                    sentTime = m.SentTime
+                })
+                .ToListAsync();
+
+            return Ok(messages); // Trả về dạng JSON chuẩn xác cho Flutter
         }
 
         // ==========================================
