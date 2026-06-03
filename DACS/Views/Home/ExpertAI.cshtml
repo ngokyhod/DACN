@@ -108,6 +108,7 @@
     .ai .message-content {
         padding-left: 0;
         color: var(--text-color);
+        width: 100%;
     }
 
     .ai-avatar {
@@ -136,8 +137,8 @@
         border: 1px solid var(--input-border);
         border-radius: 12px;
         padding: 14px;
-        padding-left: 55px; /* Chừa chỗ cho icon ảnh */
-        padding-right: 55px; /* Chừa chỗ cho icon gửi */
+        padding-left: 55px;
+        padding-right: 55px;
     }
 
     .btn-action {
@@ -218,7 +219,6 @@
             color: white;
         }
 
-    /* CSS cho vùng hiển thị ảnh xem trước */
     #imgPreviewContainer {
         position: relative;
         display: inline-block;
@@ -249,35 +249,29 @@
         cursor: pointer;
     }
 
-    /* ========================================================= */
-    /* CSS CHO TRẠNG THÁI CỦA AGENT (TỰ ĐỘNG BIẾN MẤT SAU 5 GIÂY) */
-    /* ========================================================= */
     .ai-status {
         color: #8e8ea0;
         font-size: 0.9em;
         font-style: italic;
         margin-bottom: 6px;
         animation: fadeOutStatus 1s ease-in-out forwards;
-        animation-delay: 5s; /* Thời gian chờ trước khi biến mất (5 giây) */
+        animation-delay: 5s;
         overflow: hidden;
     }
 
     @@keyframes fadeOutStatus {
-        0%
+        0% {
+            opacity: 1;
+            max-height: 50px;
+        }
 
-    {
-        opacity: 1;
-        max-height: 50px;
-    }
-
-    100% {
-        opacity: 0;
-        max-height: 0;
-        margin-bottom: 0;
-        padding: 0;
-        border: none;
-    }
-
+        100% {
+            opacity: 0;
+            max-height: 0;
+            margin-bottom: 0;
+            padding: 0;
+            border: none;
+        }
     }
 </style>
 
@@ -341,24 +335,17 @@
     let currentSessionId = urlParams.get('session') || generateUUID();
     document.getElementById("sessId").innerText = currentSessionId.substring(0,8);
     let abortController = null;
-
-    // Biến lưu trữ ảnh Base64
     let selectedImageBase64 = null;
 
     loadSessionsList();
     if(urlParams.get('session')) loadConversation(currentSessionId);
 
-    // --- XỬ LÝ ẢNH ---
     function previewImage(input) {
         if (input.files && input.files[0]) {
             const file = input.files[0];
-
-            // Đọc file để hiển thị preview
             const reader = new FileReader();
             reader.onload = function(e) {
-                // Tách lấy phần data base64 (bỏ đi đoạn 'data:image/jpeg;base64,')
                 selectedImageBase64 = e.target.result.split(',')[1];
-
                 document.getElementById("imgPreview").src = e.target.result;
                 document.getElementById("imgPreviewContainer").style.display = "inline-block";
                 document.getElementById("userInp").focus();
@@ -388,12 +375,9 @@
             sessions.forEach(s => {
                 const item = document.createElement("div");
                 item.className = `history-item ${s.sessionId === currentSessionId ? 'active' : ''}`;
-
                 let title = s.preview || "Cuộc hội thoại mới";
                 if (title.length > 35) title = title.substring(0, 35) + "...";
-
                 item.innerHTML = `<i class="bi bi-chat-text me-2"></i> ${title}`;
-
                 item.onclick = () => {
                     window.history.pushState({}, "", "?session=" + s.sessionId);
                     location.reload();
@@ -403,6 +387,9 @@
         } catch(e) { console.error("Lỗi tải lịch sử:", e); }
     }
 
+    // =======================================================================
+    // TẠO GIAO DIỆN (UI) 2 BƯỚC: HỎI SỐ LƯỢNG (Nếu thiếu) -> THANH TOÁN
+    // =======================================================================
     function formatAIMessage(rawText, showButtons = false) {
         let suggestions = [];
         let mainText = rawText.replace(/\[SUGGESTION\](.*)/g, function(match, suggestionText) {
@@ -410,7 +397,86 @@
             return "";
         });
 
+        let buyFormHtml = "";
+
+        mainText = mainText.replace(/\[ACTION_BUY:\s*([^|\]]+)\|\s*([^|\]]+)\|\s*([^\]]+)\]/g, function(match, productIdRaw, productName, quantityRaw) {
+
+            let productId = productIdRaw.trim();
+            let uniqueId = "buyFlow_" + Math.random().toString(36).substr(2, 9);
+
+            let safeQty = parseFloat(quantityRaw);
+            let hasQty = !isNaN(safeQty) && safeQty > 0;
+
+            let step1Style = hasQty ? 'display: none;' : 'display: block;';
+            let step2Style = hasQty ? 'display: block;' : 'display: none;';
+            let displayQty = hasQty ? safeQty : '';
+
+            buyFormHtml += `
+            <div class="card mt-3 border-success shadow-sm rounded-3 ai-action-form" style="max-width: 450px;">
+                <div class="card-header bg-success text-white fw-bold">
+                    <i class="bi bi-cart-check-fill"></i> MUA HÀNG NHANH: ${productName}
+                </div>
+                <div class="card-body bg-white">
+
+                    <div id="step1_${uniqueId}" style="${step1Style}">
+                        <p class="text-muted small mb-2">Vui lòng nhập khối lượng bạn muốn mua:</p>
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="number" id="inputQty_${uniqueId}" class="form-control text-center fw-bold text-success fs-6" placeholder="Nhập số kg..." min="0.1" max="10000" step="0.1" value="${displayQty}">
+                            <span class="input-group-text">Kg</span>
+                        </div>
+                        <button type="button" class="btn btn-success btn-sm w-100 fw-bold" onclick="nextToCheckout('${uniqueId}')">
+                            Tiếp tục điền thông tin <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <div id="step2_${uniqueId}" style="${step2Style}">
+                        <form method="POST" action="/ShoppingCart/CheckoutFromAI">
+                            <input type="hidden" name="productId" value="${productId}">
+
+                            <div class="mb-3 d-flex justify-content-between align-items-center bg-light p-2 rounded border border-success">
+                                <span class="fw-bold text-success"><i class="bi bi-box-seam"></i> Số lượng:</span>
+                                <div class="input-group input-group-sm" style="width: 130px;">
+                                    <input type="number" id="qty_${uniqueId}" name="khoiluong" class="form-control text-center fw-bold text-success fs-6" value="${displayQty}" min="0.1" max="10000" step="0.1" required>
+                                    <span class="input-group-text">Kg</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Họ và tên người nhận:</label>
+                                <input type="text" name="Tendathang" class="form-control form-control-sm" required placeholder="Nhập tên...">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label text-muted mb-1" style="font-size: 12px;">SĐT Liên hệ:</label>
+                                <input type="tel" name="SoDienThoaidathang" class="form-control form-control-sm" required placeholder="09xxxxxxx...">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Địa chỉ nhận hàng:</label>
+                                <input type="text" name="ShippingAddress" class="form-control form-control-sm" required placeholder="Nhập địa chỉ...">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Ghi chú:</label>
+                                <textarea name="Notes" class="form-control form-control-sm" rows="2"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted mb-1" style="font-size: 12px;">Phương thức thanh toán:</label>
+                                <select name="M_PhuongThuc" class="form-select form-select-sm" required>
+                                    <option value="" disabled selected>-- Chọn phương thức --</option>
+                                    <option value="PT001">Thanh toán khi nhận hàng (COD)</option>
+                                    <option value="PT005">Thanh toán VNPAY trực tuyến</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-success btn-sm w-100 fw-bold" style="font-size: 14px;" onclick="this.innerHTML='<i class=\\'fas fa-spinner fa-spin\\'></i> Đang xử lý...';">
+                                <i class="bi bi-bag-check-fill"></i> Xác Nhận Đặt Mua
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>`;
+            return "";
+        });
+
         let htmlContent = marked.parse(mainText.trim());
+        if (buyFormHtml) htmlContent += buyFormHtml;
 
         if (showButtons && suggestions.length > 0) {
             let buttonsHtml = '<div class="ai-suggestion-container">';
@@ -425,6 +491,20 @@
         return htmlContent;
     }
 
+    // Hàm chuyển sang form thanh toán nếu AI không lấy được số lượng ban đầu
+    function nextToCheckout(uniqueId) {
+        let val = parseFloat(document.getElementById('inputQty_' + uniqueId).value);
+        if (isNaN(val) || val <= 0) {
+            alert("⚠️ Lỗi: Vui lòng nhập số lượng mua hợp lệ (lớn hơn 0)!");
+            return;
+        }
+        document.getElementById('qty_' + uniqueId).value = val;
+        document.getElementById('step1_' + uniqueId).style.display = 'none';
+        document.getElementById('step2_' + uniqueId).style.display = 'block';
+    }
+
+    
+
     async function loadConversation(sessionId) {
         try {
             const res = await fetch('/History/GetConversation?sessionId=' + sessionId);
@@ -436,7 +516,7 @@
                 const role = m.isAi ? "ai" : "user";
                 const avatar = m.isAi ? `<div class="ai-avatar">AI</div>` : "";
                 const content = m.isAi ? formatAIMessage(m.content, false) : m.content;
-                chatBox.innerHTML += `<div class="message-row ${role}">${avatar}<div class="message-content">${content}</div></div>`;
+                chatBox.innerHTML += `<div class="message-row ${role}">${avatar}<div class="message-content w-100">${content}</div></div>`;
             });
             chatBox.scrollTop = chatBox.scrollHeight;
         } catch(e) { console.error(e); }
@@ -451,7 +531,6 @@
         e.preventDefault();
         const input = document.getElementById("userInp");
         const msg = input.value.trim();
-        // Cho phép gửi nếu có tin nhắn HOẶC có hình ảnh
         if (msg || selectedImageBase64) sendMessageAction(msg);
     });
 
@@ -460,9 +539,10 @@
         const chatBox = document.getElementById("chatBox");
         const loader = document.getElementById("loadingStatus");
 
+        // Khi người dùng chat câu mới, Ẩn toàn bộ Form Checkout cũ đi cho sạch màn hình
+        document.querySelectorAll('.ai-action-form').forEach(el => el.style.display = 'none');
         document.querySelectorAll('.ai-suggestion-container').forEach(el => el.remove());
 
-        // Hiển thị tin nhắn User (Kèm hình ảnh nếu có)
         let displayMsg = msg;
         if (selectedImageBase64) {
             let imgTag = `<br><img src="data:image/jpeg;base64,${selectedImageBase64}" style="max-width: 200px; border-radius: 8px; margin-top: 8px;">`;
@@ -475,29 +555,24 @@
         chatBox.scrollTop = chatBox.scrollHeight;
         toggleButtons(true);
 
-        // Lưu dữ liệu vào biến phụ rồi xóa hình ngay lập tức ở giao diện
         let currentImgBase64 = selectedImageBase64;
         let originalMsg = msg || "Nhận diện hình ảnh này";
         clearImage();
 
-        // LƯU Ý C # SERVER: Hiện tại DB C# của bạn đang lưu Text.
-        // Nếu muốn lưu ảnh vào DB thì bạn phải sửa hàm SaveMessage ở C#
         await fetch('/History/SaveMessage', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ SessionId: currentSessionId, Content: originalMsg, IsAi: false })
         });
 
-        // GỌI PYTHON
         abortController = new AbortController();
         let fullAiResponse = "";
         try {
-            // Đã chèn field 'image' vào Body gửi lên Python
             const response = await fetch('http://localhost:5000/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: currentSessionId,
                     question: originalMsg,
-                    image: currentImgBase64 // Gửi cho LLaVA/Moondream đọc
+                    image: currentImgBase64
                 }),
                 signal: abortController.signal
             });
@@ -505,7 +580,7 @@
             loader.style.display = "none";
             const aiRow = document.createElement("div");
             aiRow.className = "message-row ai";
-            aiRow.innerHTML = `<div class="ai-avatar">AI</div><div class="message-content"></div>`;
+            aiRow.innerHTML = `<div class="ai-avatar">AI</div><div class="message-content w-100"></div>`;
             chatBox.appendChild(aiRow);
             const contentDiv = aiRow.querySelector(".message-content");
 

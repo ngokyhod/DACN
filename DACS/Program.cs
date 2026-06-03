@@ -72,6 +72,7 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 //builder.Services.AddScoped<IGeoService, GeoService>();
 builder.Services.AddSingleton<BlockchainService>();
+builder.Services.AddScoped<TraceabilityService>();
 builder.Services.AddScoped<INguoiMuaRepository, NguoiMuaRepository>();
 builder.Services.AddScoped<IThuGomRepository, ThuGomRepository>();
 builder.Services.AddScoped<ISanPhamRepository, EFSanPhamRepository>();

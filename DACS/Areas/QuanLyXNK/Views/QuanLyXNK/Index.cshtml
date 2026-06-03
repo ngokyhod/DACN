@@ -268,7 +268,7 @@
                                                 <button type="submit" class="btn btn-sm btn-outline-warning" title="Bắt đầu">
                                                     <i class="fas fa-truck-loading"></i>
                                                 </button>
-                                            </form>                                           
+                                            </form>
                                             <a asp-action="EditSchedule" asp-route-id="@request.M_YeuCau" class="btn btn-sm btn-outline-secondary" title="Sửa lịch"><i class="fas fa-edit"></i></a>
                                         }
                                         else if (request.TrangThai == "Đang thu gom")
@@ -296,51 +296,6 @@
                                     </td>
                                 </tr>
                             }
-                            <div class="modal fade" id="completeConfirmationModal" tabindex="-1" aria-labelledby="completeModalLabel" aria-hidden="true">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="completeModalLabel">Xác nhận Hoàn thành Yêu cầu</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <p>Bạn có chắc muốn đánh dấu yêu cầu <strong id="modal-request-id-display">[Mã YC]</strong> là HOÀN THÀNH?</p>
-                                            <hr />
-                                            <p class="fw-bold">Vui lòng chọn kho đích để nhập hàng:</p>
-                                            <div class="mb-3">
-                                                <label for="targetKhoSelect" class="form-label">Kho Đích <span class="text-danger">*</span></label>
-                                                <select id="targetKhoSelect" class="form-select form-select-sm" required>
-                                                    <option value="" selected disabled>-- Chọn kho hàng --</option>
-                                                    @* Vòng lặp qua danh sách kho từ ViewModel *@
-                                                    @if (Model?.ActiveKhoHangOptions != null)
-                                                    {
-                                                        @foreach (var khoOption in Model.ActiveKhoHangOptions)
-                                                        {
-                                                            <option value="@khoOption.Value">@khoOption.Text</option>
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        <option value="" disabled>Không tải được danh sách kho</option>
-                                                    }
-                                                </select>
-                                                <div id="khoSelectError" class="text-danger mt-1" style="display: none;">Vui lòng chọn kho đích.</div>
-                                                <div class="ai-kho-suggestion-hint small text-success mt-2"></div>
-                                            </div>
-                                            @* Input ẩn để lưu M_YeuCau *@
-                                            <input type="hidden" id="modal-request-id-hidden" />
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                                <i class="fas fa-times me-1"></i> Hủy
-                                            </button>
-                                            <button type="button" class="btn btn-success" id="confirmCompleteBtn">
-                                                <i class="fas fa-check me-1"></i> Xác nhận Hoàn thành
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         }
                         else
                         {
@@ -430,6 +385,15 @@
             <div class="modal-body">
                 <p>Bạn có chắc muốn đánh dấu yêu cầu <strong id="modal-request-id-display">[Mã YC]</strong> là HOÀN THÀNH?</p>
                 <hr />
+
+                <p class="fw-bold text-primary mb-2"><i class="fas fa-tint"></i> Nhập độ ẩm thực tế:</p>
+                <div class="mb-4">
+                    <label class="form-label d-flex justify-content-between">
+                        <span>Độ ẩm đo được:</span>
+                        <span id="displayDoAm" class="fw-bold text-primary">15%</span>
+                    </label>
+                    <input type="range" class="form-range" id="inputDoAm" min="5" max="50" step="0.5" value="15">
+                </div>
                 <p class="fw-bold">Vui lòng chọn kho đích để nhập hàng:</p>
                 <div class="mb-3">
                     <label for="targetKhoSelect" class="form-label">Kho Đích <span class="text-danger">*</span></label>
@@ -460,7 +424,7 @@
                     <i class="fas fa-check me-1"></i> Xác nhận Hoàn thành
                 </button>
             </div>
-            
+
         </div>
     </div>
 </div>
@@ -477,6 +441,12 @@
     @* Đảm bảo jQuery đã được load trước script này *@
     <script>
         $(document).ready(function () {
+            // ---> MỚI THÊM: Script trượt để cập nhật số % Độ ẩm
+            $('#inputDoAm').on('input', function() {
+                $('#displayDoAm').text($(this).val() + '%');
+            });
+            // <---
+
             var completeModalElement = document.getElementById('completeConfirmationModal');
             if (completeModalElement) {
                 var completeModal = new bootstrap.Modal(completeModalElement);
@@ -491,6 +461,11 @@
                     $('#modal-request-id-display').text(requestIdToComplete);
                     $('#modal-request-id-hidden').val(requestIdToComplete);
                     $('#targetKhoSelect').val(recommendedKho || '');
+
+                    // Reset độ ẩm về mặc định 15% mỗi khi mở modal
+                    $('#inputDoAm').val(15);
+                    $('#displayDoAm').text('15%');
+
                     if (recommendedKho) {
                         $('.ai-kho-suggestion-hint').text('AI gợi ý: ' + recommendedKhoName + ' (' + recommendedKho + ') - ' + recommendedScore + '%');
                     } else {
@@ -505,6 +480,8 @@
                     console.log("Confirm button clicked!");
                     var selectedKho = $('#targetKhoSelect').val();
                     var requestId = $('#modal-request-id-hidden').val();
+                    var actualMoisture = $('#inputDoAm').val(); // ---> MỚI THÊM: Lấy giá trị thanh trượt
+
                     console.log("Request ID:", requestId);
                     console.log("Selected Kho:", selectedKho);
 
@@ -516,9 +493,12 @@
                         $('#khoSelectError').hide();
                     }
 
+                    // ---> MỚI THÊM: Nối thêm tham số doAmThucTe vào link cũ của bạn
                     var postUrl = '@Url.Action("MarkComplete", "QuanLyXNK", new { Area = "QuanLyXNK" })'
                                 + '/' + requestId
-                                + '?targetMaKho=' + encodeURIComponent(selectedKho);
+                                + '?targetMaKho=' + encodeURIComponent(selectedKho)
+                                + '&doAmThucTe=' + encodeURIComponent(actualMoisture);
+
                     console.log("Generated POST URL:", postUrl);
 
                     var hiddenForm = $('#hiddenCompleteForm');
@@ -567,24 +547,24 @@
 
 
     @* tìm kiếm *@
- <script>
-        function filterRequests() {
-       const keyword = document.getElementById("search-input").value.toLowerCase().trim();
+    <script>
+           function filterRequests() {
+          const keyword = document.getElementById("search-input").value.toLowerCase().trim();
 
-       const rows = document.querySelectorAll("#requestTable tbody tr");
+          const rows = document.querySelectorAll("#requestTable tbody tr");
 
-       rows.forEach(row => {
-         const cells = row.getElementsByTagName("td");
-         const textContent = row.innerText.toLowerCase();
+          rows.forEach(row => {
+            const cells = row.getElementsByTagName("td");
+            const textContent = row.innerText.toLowerCase();
 
-         const matchesKeyword = textContent.includes(keyword);
+            const matchesKeyword = textContent.includes(keyword);
 
-         row.style.display = (matchesKeyword ) ? "" : "none";
-       });
-     }
+            row.style.display = (matchesKeyword ) ? "" : "none";
+          });
+        }
 
-     // Gắn sự kiện lọc
-     document.getElementById("search-input").addEventListener("keyup", filterRequests);
+        // Gắn sự kiện lọc
+        document.getElementById("search-input").addEventListener("keyup", filterRequests);
 
- </script>
+    </script>
 }

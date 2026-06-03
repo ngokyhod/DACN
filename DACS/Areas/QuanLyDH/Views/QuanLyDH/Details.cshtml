@@ -1,7 +1,10 @@
 ﻿@model DACS.Models.DonHang
 @{
-    // ViewData["Title"] được set từ Controller: $"Chi tiết đơn hàng {Model.M_DonHang}"
-    // Layout = "_AdminLayout"; // Đặt Layout của bạn ở đây
+    ViewData["Title"] = $"Chi tiết đơn hàng {Model.M_DonHang}";
+
+    // BẮT BUỘC: Đặt Layout = null vì bên dưới chúng ta đã xây dựng sẵn bộ khung HTML <html> và <body> riêng
+    Layout = null;
+
     var orderStatusBadgeClass = ViewData["OrderStatusBadgeClass"] as string ?? "badge bg-secondary";
     var paymentStatusText = ViewData["PaymentStatusText"] as string ?? "Chưa rõ";
     var paymentStatusBadgeClass = ViewData["PaymentStatusBadgeClass"] as string ?? "badge bg-light text-dark";
@@ -15,28 +18,28 @@
     <title>@ViewData["Title"] - Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <link rel="stylesheet" href="~/css/AdminLayout.css" /> @* Giả sử bạn có file này *@
     <style>
-        .container-fluid.d-flex {
-            min-height: 100vh;
-            padding: 0;
+        body {
+            background-color: #f4f6f9;
+            margin: 0;
+            overflow: hidden; /* Ngăn scroll toàn trang, chỉ scroll phần nội dung */
         }
 
-        .container {
-            display: grid;
-            max-width: 100%;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-            flex-direction: row;
+        /* BỘ KHUNG CHUẨN ÉP GIAO DIỆN FULL MÀN HÌNH */
+        .wrapper-layout {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
         }
-        /* Sửa height thành min-height */
+
+        /* KHU VỰC MENU TRÁI */
         .sidebar {
             background-color: #212529;
             color: #fff;
             padding: 15px;
             width: 250px;
             flex-shrink: 0;
+            overflow-y: auto;
         }
 
             .sidebar h2 {
@@ -56,266 +59,297 @@
                     border-radius: 0.25rem;
                 }
 
+        /* KHU VỰC NỘI DUNG CHÍNH (ĐÃ FIX LỖI HỤT PHẢI) */
         .main-content-area {
-            padding: 25px;
+            flex: 1; /* Lệnh này bắt buộc nội dung phải dãn chiếm toàn bộ không gian còn lại */
+            min-width: 0; /* Lệnh này chống vỡ khung Flexbox */
+            padding: 30px;
             background-color: #f8f9fa;
-            flex-grow: 1;
-            overflow-y: auto;
+            overflow-y: auto; /* Cuộn dọc cho riêng nội dung */
         }
 
         .page-header {
-            font-size: 1.75rem;
-            font-weight: 500;
+            font-size: 1.5rem;
+            font-weight: 700;
             margin-bottom: 1.5rem;
-            color: #343a40;
+            color: #2c3e50;
         }
 
         .card-custom {
             background-color: #fff;
             padding: 1.5rem;
-            border-radius: 0.375rem;
-            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.05);
             margin-bottom: 1.5rem;
+            border: 1px solid #e9ecef;
+            width: 100%; /* Ép card luôn tràn 100% cột */
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #344767;
+            border-bottom: 2px solid #f1f3f5;
+            padding-bottom: 0.75rem;
+            margin-bottom: 1.25rem;
         }
 
         .info-label {
-            font-weight: 500;
-            color: #495057;
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 0.95rem;
         }
 
         .info-value {
             color: #212529;
+            font-size: 0.95rem;
+            font-weight: 500;
         }
 
-        .table th {
-            background-color: #e9ecef;
-        }
-
-        .action-buttons .btn, .action-buttons form {
-            margin-right: 5px;
-            margin-bottom: 5px;
+        .action-buttons form {
+            margin: 0;
         }
     </style>
 </head>
 <body>
-    <div class="container-fluid d-flex p-0">
+    <div class="wrapper-layout">
+        @* MENU TRÁI *@
         @await Html.PartialAsync("~/Areas/QuanLyDH/Views/Shared/_QuanLyDHSidebar.cshtml")
 
-            @if (TempData["SuccessMessage"] != null)
-            {
-                <div class="alert alert-success alert-dismissible fade show" role="alert">@TempData["SuccessMessage"] <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
-            }
-            @if (TempData["ErrorMessage"] != null)
-            {
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">@TempData["ErrorMessage"] <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
-            }
-            @if (TempData["InfoMessage"] != null)
-            {
-                <div class="alert alert-info alert-dismissible fade show" role="alert">@TempData["InfoMessage"] <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
-            }
+        @* NỘI DUNG PHẢI *@
+        <div class="main-content-area">
+            <div class="container-fluid p-0">
 
-            <div class="card-custom action-buttons">
-                <h5 class="card-title">Hành Động</h5>
-                @if (Model.TrangThai == "Chưa xử lý" || Model.TrangThai == "Chờ xác nhận")
-                {
-                    <a asp-action="EditOrder" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-warning"><i class="fas fa-edit me-1"></i> Sửa Đơn</a>
-                    <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <input type="hidden" name="newStatusKey" value="confirm" />
-                        <button type="submit" class="btn btn-success"><i class="fas fa-check me-1"></i> Xác Nhận</button>
-                    </form>
-                    <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;" onsubmit="return confirm('Bạn có chắc muốn hủy đơn hàng này?');">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <input type="hidden" name="newStatusKey" value="cancel" />
-                        <button type="submit" class="btn btn-danger"><i class="fas fa-times-circle me-1"></i> Hủy Đơn</button>
-                    </form>
-                }
-                else if (Model.TrangThai == "Đã xác nhận")
-                {
-                    <a asp-action="EditOrder" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-warning"><i class="fas fa-edit me-1"></i> Sửa Đơn</a>
-                    <a asp-action="UpdateShippingInfo" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-primary"><i class="fas fa-truck me-1"></i> Cập nhật Vận Chuyển</a>
-                    <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;" onsubmit="return confirm('Bạn có chắc muốn hủy đơn hàng này?');">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <input type="hidden" name="newStatusKey" value="cancel" />
-                        <button type="submit" class="btn btn-danger"><i class="fas fa-times-circle me-1"></i> Hủy Đơn</button>
-                    </form>
-                }
-                else if (Model.TrangThai == "Đang xử lý")
-                {
-                    <a asp-action="UpdateShippingInfo" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-primary"><i class="fas fa-truck me-1"></i> Cập nhật Vận Chuyển / Giao hàng</a>
-                }
-                else if (Model.TrangThai == "Đang giao hàng")
-                {
-                    <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <input type="hidden" name="newStatusKey" value="complete" />
-                        <button type="submit" class="btn btn-success"><i class="fas fa-check-double me-1"></i> Đã Giao/Hoàn Thành</button>
-                    </form>
-                }
-                else if (Model.TrangThai == "Hoàn thành" && (paymentStatusText == "Đã thanh toán" || paymentStatusText == "Đã TT"))
-                {
-                    <form asp-action="RefundPayment" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;" onsubmit="return confirm('Xác nhận hoàn tiền cho đơn hàng này?');">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <button type="submit" class="btn btn-warning"><i class="fas fa-hand-holding-usd me-1"></i> Hoàn Tiền</button>
-                    </form>
-                }
-                else if (Model.TrangThai == "Đã hủy" && (paymentStatusText == "Đã thanh toán" || paymentStatusText == "Đã TT"))
-                {
-                    <form asp-action="RefundPayment" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" style="display:inline;" onsubmit="return confirm('Đơn đã hủy. Xác nhận hoàn tiền?');">
-                        <input type="hidden" name="id" value="@Model.M_DonHang" />
-                        <button type="submit" class="btn btn-warning"><i class="fas fa-hand-holding-usd me-1"></i> Hoàn Tiền (Sau Hủy)</button>
-                    </form>
-                }
-        <a asp-action="UpdatePaymentStatus" asp-controller="QuanLyThanhToan" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-info"><i class="far fa-credit-card me-1"></i> Cập nhật TT Thanh Toán</a>
-        <a asp-controller="QuanLyDH" asp-action="index">
-            <i class="fas fa-arrow-left me-1"></i> Quay lại
-        </a>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="page-header m-0"><i class="fas fa-file-invoice text-primary me-2"></i>Chi Tiết Đơn Hàng #@Model.M_DonHang</h2>
+                    <a asp-controller="QuanLyDH" asp-action="index" class="btn btn-outline-secondary shadow-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Quay lại danh sách
+                    </a>
+                </div>
 
-            </div>
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>@TempData["ErrorMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+                @if (TempData["InfoMessage"] != null)
+                {
+                    <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>@TempData["InfoMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
 
+                <div class="card-custom border-top border-primary border-4">
+                    <h5 class="card-title text-primary"><i class="fas fa-cogs me-2"></i>Thao Tác Quản Trị</h5>
+                    <div class="d-flex flex-wrap gap-2 action-buttons">
 
-            <div class="row">
-                <div class="col-lg-7">
-                    <div class="card-custom">
-                        <h5 class="card-title mb-3">Thông Tin Đơn Hàng</h5>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Mã Đơn Hàng:</div>
-                            <div class="col-sm-8 info-value">@Model.M_DonHang</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Ngày Đặt:</div>
-                            <div class="col-sm-8 info-value">@Model.NgayDat.ToString("dd/MM/yyyy HH:mm:ss")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Trạng Thái Đơn Hàng:</div>
-                            <div class="col-sm-8 info-value"><span class="badge @orderStatusBadgeClass">@Model.TrangThai</span></div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Trạng Thái Thanh Toán:</div>
-                            <div class="col-sm-8 info-value"><span class="badge @paymentStatusBadgeClass">@paymentStatusText</span></div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Phương Thức Thanh Toán:</div>
-                            <div class="col-sm-8 info-value">@(Model.PhuongThucThanhToan?.TenPhuongThuc ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Tổng Tiền:</div>
-                            <div class="col-sm-8 info-value fw-bold">@Model.TotalPrice.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) đ</div>
-                        </div>
-                        @if (!string.IsNullOrEmpty(Model.Notes))
+                        @* GIỮ NGUYÊN HOÀN TOÀN CÁC ĐIỀU KIỆN CHỨC NĂNG CỦA BẠN *@
+
+                        @if (Model.TrangThai == "Chưa xử lý" || Model.TrangThai == "Chờ xác nhận")
                         {
-                            <div class="row mb-2">
-                                <div class="col-sm-4 info-label">Ghi Chú Đơn Hàng:</div>
-                                <div class="col-sm-8 info-value">@Model.Notes</div>
-                            </div>
+                            <a asp-action="EditOrder" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-warning shadow-sm"><i class="fas fa-edit me-1"></i> Sửa Đơn</a>
+                            <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <input type="hidden" name="newStatusKey" value="confirm" />
+                                <button type="submit" class="btn btn-success shadow-sm"><i class="fas fa-check me-1"></i> Xác Nhận</button>
+                            </form>
+                            <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" onsubmit="return confirm('Bạn có chắc muốn hủy đơn hàng này?');">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <input type="hidden" name="newStatusKey" value="cancel" />
+                                <button type="submit" class="btn btn-danger shadow-sm"><i class="fas fa-times-circle me-1"></i> Hủy Đơn</button>
+                            </form>
                         }
-                    </div>
-
-                    <div class="card-custom">
-                        <h5 class="card-title mb-3">Thông Tin Khách Hàng (Người Đặt)</h5>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Tên Khách Hàng:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Số Điện Thoại:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Email:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.Email_KhachHang ?? "N/A")</div>
-                        </div>
-
-                    </div>
-
-                    <div class="card-custom">
-                        <h5 class="card-title mb-3">Thông Tin Giao Hàng (Người Nhận)</h5>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Tên Người Nhận:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">SĐT Người Nhận:</div>
-                            <div class="col-sm-8 info-value">@( Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Địa Chỉ Giao Hàng:</div>
-                            <div class="col-sm-8 info-value">@Model.ShippingAddress</div>
-                        </div>
-                        @if (Model.VanChuyen != null)
+                        else if (Model.TrangThai == "Đã xác nhận")
                         {
+                            <a asp-action="EditOrder" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-warning shadow-sm"><i class="fas fa-edit me-1"></i> Sửa Đơn</a>
+                            <a asp-action="UpdateShippingInfo" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-primary shadow-sm"><i class="fas fa-truck me-1"></i> Cập nhật Vận Chuyển</a>
+                            <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" onsubmit="return confirm('Bạn có chắc muốn hủy đơn hàng này?');">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <input type="hidden" name="newStatusKey" value="cancel" />
+                                <button type="submit" class="btn btn-danger shadow-sm"><i class="fas fa-times-circle me-1"></i> Hủy Đơn</button>
+                            </form>
+                        }
+                        else if (Model.TrangThai == "Đang xử lý")
+                        {
+                            <a asp-action="UpdateShippingInfo" asp-controller="QuanLyDH" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-primary shadow-sm"><i class="fas fa-truck me-1"></i> Cập nhật Vận Chuyển / Giao hàng</a>
+                        }
+                        else if (Model.TrangThai == "Đang giao hàng")
+                        {
+                            <form asp-action="UpdateStatus" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <input type="hidden" name="newStatusKey" value="complete" />
+                                <button type="submit" class="btn btn-success shadow-sm"><i class="fas fa-check-double me-1"></i> Đã Giao/Hoàn Thành</button>
+                            </form>
+                        }
+                        else if (Model.TrangThai == "Hoàn thành" && (paymentStatusText == "Đã thanh toán" || paymentStatusText == "Đã TT"))
+                        {
+                            <form asp-action="RefundPayment" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" onsubmit="return confirm('Xác nhận hoàn tiền cho đơn hàng này?');">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <button type="submit" class="btn btn-warning shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> Hoàn Tiền</button>
+                            </form>
+                        }
+                        else if (Model.TrangThai == "Đã hủy" && (paymentStatusText == "Đã thanh toán" || paymentStatusText == "Đã TT"))
+                        {
+                            <form asp-action="RefundPayment" asp-controller="QuanLyDH" asp-area="QuanLyDH" method="post" onsubmit="return confirm('Đơn đã hủy. Xác nhận hoàn tiền?');">
+                                <input type="hidden" name="id" value="@Model.M_DonHang" />
+                                <button type="submit" class="btn btn-warning shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> Hoàn Tiền (Sau Hủy)</button>
+                            </form>
+                        }
+
+                        <a asp-action="UpdatePaymentStatus" asp-controller="QuanLyThanhToan" asp-area="QuanLyDH" asp-route-id="@Model.M_DonHang" class="btn btn-info text-white shadow-sm">
+                            <i class="far fa-credit-card me-1"></i> Cập nhật TT Thanh Toán
+                        </a>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-7">
+                        <div class="card-custom">
+                            <h5 class="card-title"><i class="fas fa-info-circle text-primary me-2"></i>Thông Tin Đơn Hàng</h5>
                             <div class="row mb-2">
-                                <div class="col-sm-4 info-label">Đơn Vị Vận Chuyển:</div>
-                                <div class="col-sm-8 info-value">@Model.VanChuyen.DonViVanChuyen</div>
+                                <div class="col-sm-4 info-label">Mã Đơn Hàng:</div>
+                                <div class="col-sm-8 info-value fw-bold">@Model.M_DonHang</div>
                             </div>
                             <div class="row mb-2">
-                                <div class="col-sm-4 info-label">Mã Vận Đơn:</div>
-                                <div class="col-sm-8 info-value">
-                                    @Model.M_VanDon
-                                    @if (!string.IsNullOrEmpty(Model.M_VanDon))
-                                    {
-                                        @* Placeholder for tracking link generation logic, similar to TrackOrder action *@
-                                        @* <a href="#" class="ms-2"><i class="fas fa-route"></i> Theo dõi</a> *@
-                                    }
+                                <div class="col-sm-4 info-label">Ngày Đặt:</div>
+                                <div class="col-sm-8 info-value">@Model.NgayDat.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Trạng Thái Đơn Hàng:</div>
+                                <div class="col-sm-8 info-value"><span class="@orderStatusBadgeClass py-1 px-2">@Model.TrangThai</span></div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Trạng Thái Thanh Toán:</div>
+                                <div class="col-sm-8 info-value"><span class="@paymentStatusBadgeClass py-1 px-2 border">@paymentStatusText</span></div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Phương Thức Thanh Toán:</div>
+                                <div class="col-sm-8 info-value">@(Model.PhuongThucThanhToan?.TenPhuongThuc ?? "N/A")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Tổng Tiền:</div>
+                                <div class="col-sm-8 info-value fw-bold text-danger">@Model.TotalPrice.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) đ</div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(Model.Notes))
+                            {
+                                <div class="row mb-2">
+                                    <div class="col-sm-4 info-label text-warning">Ghi Chú Đơn Hàng:</div>
+                                    <div class="col-sm-8 info-value bg-light p-2 rounded border">@Model.Notes</div>
                                 </div>
+                            }
+                        </div>
+
+                        <div class="card-custom">
+                            <h5 class="card-title"><i class="fas fa-user text-success me-2"></i>Thông Tin Khách Hàng (Người Đặt)</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Tên Khách Hàng:</div>
+                                <div class="col-sm-8 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
                             </div>
-                        }
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Số Điện Thoại:</div>
+                                <div class="col-sm-8 info-value">@(Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Email:</div>
+                                <div class="col-sm-8 info-value text-primary">@(Model.KhachHang?.Email_KhachHang ?? "N/A")</div>
+                            </div>
+                        </div>
+
+                        <div class="card-custom">
+                            <h5 class="card-title"><i class="fas fa-map-marker-alt text-danger me-2"></i>Thông Tin Giao Hàng (Người Nhận)</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Tên Người Nhận:</div>
+                                <div class="col-sm-8 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">SĐT Người Nhận:</div>
+                                <div class="col-sm-8 info-value fw-bold">@(Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 info-label">Địa Chỉ Giao Hàng:</div>
+                                <div class="col-sm-8 info-value">@Model.ShippingAddress</div>
+                            </div>
+                            @if (Model.VanChuyen != null)
+                            {
+                                <div class="row mb-2 mt-3 pt-2 border-top">
+                                    <div class="col-sm-4 info-label">Đơn Vị Vận Chuyển:</div>
+                                    <div class="col-sm-8 info-value"><span class="badge bg-secondary">@Model.VanChuyen.DonViVanChuyen</span></div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-sm-4 info-label">Mã Vận Đơn:</div>
+                                    <div class="col-sm-8 info-value fw-bold text-primary">@Model.M_VanDon</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="col-lg-5">
+                        <div class="card-custom">
+                            <h5 class="card-title"><i class="fas fa-box-open text-warning me-2"></i>Chi Tiết Sản Phẩm</h5>
+                            @if (Model.ChiTietDatHangs != null && Model.ChiTietDatHangs.Any())
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-bordered align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th scope="col">Sản Phẩm</th>
+                                                <th scope="col" class="text-center">KL</th>
+                                                <th scope="col" class="text-end">Thành Tiền</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in Model.ChiTietDatHangs)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            @if (item.SanPham != null && !string.IsNullOrEmpty(item.SanPham.AnhSanPham))
+                                                            {
+                                                                <img src="~/@item.SanPham.AnhSanPham" alt="@item.SanPham.TenSanPham" class="rounded border shadow-sm me-2" style="width: 40px; height: 40px; object-fit: cover;" />
+                                                            }
+                                                            <span class="fw-medium">@(item.SanPham?.TenSanPham ?? "Sản phẩm không xác định")</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">@item.Khoiluong</td>
+                                                    <td class="text-end">@((item.Khoiluong * item.GiaDatHang).ToString("N0")) đ</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                        <tfoot class="table-light">
+                                            <tr>
+                                                <td colspan="2" class="text-end fw-bold text-muted">Tổng sản phẩm:</td>
+                                                <td class="text-end fw-bold">@Model.ChiTietDatHangs.Sum(c => c.Khoiluong * c.GiaDatHang).ToString("N0") đ</td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="2" class="text-end fw-bold text-muted">Phí vận chuyển:</td>
+                                                <td class="text-end fw-bold">0 đ</td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="2" class="text-end fw-bold text-primary h6 mb-0 py-3">TỔNG THANH TOÁN:</td>
+                                                <td class="text-end fw-bold text-danger h6 mb-0 py-3">@Model.TotalPrice.ToString("N0") đ</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning text-center"><i class="fas fa-exclamation-circle me-2"></i>Không có chi tiết sản phẩm cho đơn hàng này.</div>
+                            }
+                        </div>
                     </div>
                 </div>
 
-                <div class="col-lg-5">
-                    <div class="card-custom">
-                        <h5 class="card-title mb-3">Chi Tiết Sản Phẩm</h5>
-                        @if (Model.ChiTietDatHangs != null && Model.ChiTietDatHangs.Any())
-                        {
-                            <table class="table table-sm table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Sản Phẩm</th>
-                                        <th scope="col" class="text-center">KL</th>
-                                        <th scope="col" class="text-end">Đơn Giá</th>
-                                        <th scope="col" class="text-end">Thành Tiền</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var item in Model.ChiTietDatHangs)
-                                    {
-                                        <tr>
-                                            <td>
-                                                @(item.SanPham?.TenSanPham ?? "Sản phẩm không xác định")
-                                                @if (item.SanPham != null && !string.IsNullOrEmpty(item.SanPham.AnhSanPham))
-                                                {
-                                                    <img src="~/@item.SanPham.AnhSanPham" alt="@item.SanPham.TenSanPham" style="width: 30px; height: 30px; object-fit: cover; margin-left: 5px;" />
-                                                }
-                                            </td>
-                                            <td class="text-center">@item.Khoiluong</td>
-                                            <td class="text-end">@item.GiaDatHang.ToString("N0") đ</td>
-                                            <td class="text-end">@((item.Khoiluong * item.GiaDatHang).ToString("N0")) đ</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="3" class="text-end fw-bold">Tổng cộng sản phẩm:</td>
-                                        <td class="text-end fw-bold">@Model.ChiTietDatHangs.Sum(c => c.Khoiluong  * c.GiaDatHang).ToString("N0") đ</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="3" class="text-end fw-bold">Phí vận chuyển:</td>
-                                        <td class="text-end fw-bold">0 đ</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="3" class="text-end fw-bold h5">Tổng Thanh Toán:</td>
-                                        <td class="text-end fw-bold h5">@Model.TotalPrice.ToString("N0") đ</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        }
-                        else
-                        {
-                            <p>Không có chi tiết sản phẩm cho đơn hàng này.</p>
-                        }
-                    </div>
-                </div>
             </div>
         </div>
     </div>

@@ -212,7 +212,7 @@ namespace DACS.Areas.Identity.Pages.Account
                                 SDT_KhachHang = Input.PhoneNumber,
                                 MaTinh = "T00",
                                 MaQuan = "Q0100",
-                                MaXa = "X010100",
+                                MaXa = "X010600",
                                 DiaChi_DuongApThon = "chua cap nhat",
                                 LinhVucHoatDong = "null",
                                 NhuCauChinh = "null",

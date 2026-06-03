@@ -22,7 +22,7 @@ namespace DACS.Areas.QuanLyDH.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<QuanLyDHController> _logger;
         private readonly BlockchainService _blockchainService;
-
+        private readonly TraceabilityService _traceabilityService;
         // --- ĐỊNH NGHĨA CÁC CHUỖI TRẠNG THÁI ĐƠN HÀNG TRONG DATABASE ---
         private const string StatusPendingDbValue = "Chờ xác nhận"; // Hoặc "Chưa xử lý" nếu bạn dùng nó làm giá trị DB ban đầu
         private const string StatusConfirmedDbValue = "Đã xác nhận";
@@ -34,11 +34,13 @@ namespace DACS.Areas.QuanLyDH.Controllers
 
         public QuanLyDHController(ApplicationDbContext context,
                                         ILogger<QuanLyDHController> logger,
-                                        BlockchainService blockchainService)
+                                        BlockchainService blockchainService,
+                                        TraceabilityService traceabilityService)
         {
             _context = context;
             _logger = logger;
             _blockchainService = blockchainService;
+            _traceabilityService = traceabilityService;
         }
 
         // GET: QuanLyDH/QuanLyDH (Index)
@@ -176,7 +178,8 @@ namespace DACS.Areas.QuanLyDH.Controllers
                 string successMessagePart = "";
                 bool canUpdate = false;
                 string inventoryError = null; // Biến giữ lỗi tồn kho
-
+                string bcAction = "";
+                string bcDetails = "";
                 switch (newStatusKey.ToLower())
                 {
                     case "confirm":
@@ -194,6 +197,8 @@ namespace DACS.Areas.QuanLyDH.Controllers
 
                             actualNewStatusInDb = StatusConfirmedDbValue;
                             successMessagePart = "xác nhận và đã trừ tồn kho.";
+                            bcAction = "Xác nhận đơn hàng";
+                            bcDetails = "Đơn hàng đã được duyệt, chờ lấy hàng.";
                             canUpdate = true;
                         }
                         break;
@@ -203,29 +208,33 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         {
                             actualNewStatusInDb = StatusProcessingDbValue;
                             successMessagePart = "chuyển sang đang xử lý.";
+                            bcAction = "Đang xử lý / Đóng gói";
+                            bcDetails = "Kho đang tiến hành đóng gói nông sản.";
                             canUpdate = true;
                         }
                         break;
 
                     case "ship":
-                        if (donHang.TrangThai == StatusConfirmedDbValue || donHang.TrangThai == StatusProcessingDbValue)
+                        if (donHang.TrangThai == StatusProcessingDbValue)
                         {
                             actualNewStatusInDb = StatusShippingDbValue;
                             successMessagePart = "chuyển sang đang giao.";
+                            bcAction = "Đang vận chuyển";
+                            bcDetails = "Đã bàn giao cho đơn vị vận chuyển.";
                             canUpdate = true;
                         }
                         break;
 
                     case "complete":
                         // SỬA: Cho phép hoàn thành từ các trạng thái đang chạy
-                        if (donHang.TrangThai == StatusShippingDbValue ||
-                            donHang.TrangThai == StatusProcessingDbValue ||
-                            donHang.TrangThai == StatusConfirmedDbValue)
+                        if (donHang.TrangThai == StatusShippingDbValue)
                         {
                             // QUAN TRỌNG: KHÔNG GỌI TRỪ KHO Ở ĐÂY NỮA (VÌ ĐÃ TRỪ Ở CONFIRM RỒI)
 
                             actualNewStatusInDb = StatusCompletedDbValue;
                             successMessagePart = "hoàn thành.";
+                            bcAction = "Giao hàng thành công";
+                            bcDetails = "Khách hàng đã nhận được sản phẩm nông sản.";
                             canUpdate = true;
                         }
                         break;
@@ -236,6 +245,8 @@ namespace DACS.Areas.QuanLyDH.Controllers
                         {
                             actualNewStatusInDb = StatusCancelledDbValue;
                             successMessagePart = "hủy (chưa trừ kho).";
+                            bcAction = "Hủy đơn hàng";
+                            bcDetails = "Đơn hàng bị hủy trước khi xử lý.";
                             canUpdate = true;
                         }
                         else if (donHang.TrangThai == StatusConfirmedDbValue ||
@@ -253,6 +264,8 @@ namespace DACS.Areas.QuanLyDH.Controllers
                                 successMessagePart = "hủy và đã hoàn tồn kho.";
                             }
                             actualNewStatusInDb = StatusCancelledDbValue;
+                            bcAction = "Hủy đơn hàng";
+                            bcDetails = "Đơn hàng bị hủy, đã hoàn trả lại tồn kho.";
                             canUpdate = true;
                         }
                         break;
@@ -275,6 +288,22 @@ namespace DACS.Areas.QuanLyDH.Controllers
 
                     await _context.SaveChangesAsync(); // Lưu tất cả thay đổi (ĐH, CTĐH, LoTonKho)
                     await transaction.CommitAsync(); // Hoàn thành transaction
+
+                    string tenAdmin = User.Identity?.Name ?? "Admin_HeThong";
+                    try
+                    {
+                        await _traceabilityService.GhiNhatKyAsync(
+                            donHang.M_DonHang,          // Mã Yêu Cầu / Đơn hàng
+                            bcAction,                   // Hành động (Đã xác nhận, Đang giao...)
+                            tenAdmin,                   // Người thực hiện
+                            "Hệ thống Quản lý",         // Vị trí
+                            bcDetails                   // Chi tiết
+                        );
+                    }
+                    catch (Exception bcEx)
+                    {
+                        _logger.LogError(bcEx, "Lỗi ghi Blockchain cho ĐH {DonHangId}", donHang.M_DonHang);
+                    }
 
                     TempData["SuccessMessage"] = $"Đơn hàng {donHang.M_DonHang} đã được {successMessagePart}";
                 }
@@ -803,7 +832,6 @@ namespace DACS.Areas.QuanLyDH.Controllers
             if (string.IsNullOrWhiteSpace(m_VanDon)) ModelState.AddModelError("M_VanDon", "Vui lòng nhập mã vận đơn.");
             if (string.IsNullOrWhiteSpace(donViVanChuyen)) ModelState.AddModelError("DonViVanChuyen", "Vui lòng nhập tên đơn vị vận chuyển.");
 
-
             if (ModelState.IsValid)
             {
                 VanChuyen vanChuyen = await _context.VanChuyens.FirstOrDefaultAsync(vc => vc.M_VanDon == m_VanDon);
@@ -815,18 +843,44 @@ namespace DACS.Areas.QuanLyDH.Controllers
                 }
                 else
                 {
-                    vanChuyen.DonViVanChuyen = donViVanChuyen; // Cập nhật nếu đã có mã vận đơn này
+                    vanChuyen.DonViVanChuyen = donViVanChuyen;
                     _context.Update(vanChuyen);
                 }
 
-                donHang.M_VanDon = m_VanDon; // Cập nhật khóa ngoại trong đơn hàng
+                donHang.M_VanDon = m_VanDon;
+
                 // Tự động chuyển trạng thái sang "Đang giao hàng" nếu hợp lệ
+                bool isStatusChangedToShipping = false;
                 if (donHang.TrangThai == StatusConfirmedDbValue || donHang.TrangThai == StatusProcessingDbValue)
                 {
                     donHang.TrangThai = StatusShippingDbValue;
+                    isStatusChangedToShipping = true; // Đánh dấu là trạng thái vừa bị đổi
                 }
+
                 _context.Update(donHang);
                 await _context.SaveChangesAsync();
+
+                // <<< === GHI LÊN BLOCKCHAIN NẾU TRẠNG THÁI VỪA CHUYỂN SANG ĐANG GIAO HÀNG === >>>
+                if (isStatusChangedToShipping)
+                {
+                    string tenAdmin = User.Identity?.Name ?? "Admin_HeThong";
+                    try
+                    {
+                        await _traceabilityService.GhiNhatKyAsync(
+                            donHang.M_DonHang,
+                            "Đang vận chuyển",
+                            tenAdmin,
+                            "Hệ thống Quản lý",
+                            $"Đã bàn giao cho đơn vị vận chuyển: {donViVanChuyen} (Mã VĐ: {m_VanDon})"
+                        );
+                    }
+                    catch (Exception bcEx)
+                    {
+                        _logger.LogError(bcEx, "Lỗi ghi Blockchain cho ĐH {DonHangId} khi cập nhật vận chuyển", donHang.M_DonHang);
+                    }
+                }
+                // <<< === KẾT THÚC GHI BLOCKCHAIN === >>>
+
                 TempData["SuccessMessage"] = $"Thông tin vận chuyển của đơn hàng {donHang.M_DonHang} đã được cập nhật.";
                 return RedirectToAction(nameof(Details), new { id = id });
             }
@@ -835,7 +889,7 @@ namespace DACS.Areas.QuanLyDH.Controllers
             else donHang.VanChuyen = new VanChuyen { M_VanDon = m_VanDon, DonViVanChuyen = donViVanChuyen };
 
             ViewData["Title"] = $"Cập nhật thông tin vận chuyển đơn hàng {id}";
-            return View(donHang); // Trả về View với model và lỗi ModelState
+            return View(donHang);
         }
 
 

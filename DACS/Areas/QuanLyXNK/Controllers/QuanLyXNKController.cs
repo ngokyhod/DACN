@@ -20,11 +20,13 @@ namespace DACS.Areas.QuanLyXNK.Controllers
         private readonly ILogger<QuanLyXNKController> _logger;
         private readonly BlockchainService _blockchainService;
         private readonly AIMatchingService _aiMatchingService;
+        private readonly TraceabilityService _traceabilityService;
 
         public QuanLyXNKController(ApplicationDbContext context,
                                      UserManager<ApplicationUser> userManager,
                                      ILogger<QuanLyXNKController> logger, BlockchainService blockchainService,
-                                     AIMatchingService aiMatchingService
+                                     AIMatchingService aiMatchingService,
+                                     TraceabilityService traceabilityService
                                      )
         {
             _context = context;
@@ -32,6 +34,7 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             _logger = logger;
             _blockchainService = blockchainService;
             _aiMatchingService = aiMatchingService;
+            _traceabilityService = traceabilityService;
         }
 
         public async Task<IActionResult> Index(string? searchTerm, DateTime? dateFilter, string? statusFilter, string? collectorFilter, int page = 1)
@@ -392,6 +395,22 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             {
                 _context.Update(yeuCau);
                 await _context.SaveChangesAsync();
+
+                string tenAdmin = User.Identity.Name ?? "Admin_HeThong";
+                try { 
+                await _traceabilityService.GhiNhatKyAsync(
+                    yeuCau.M_YeuCau,
+                    "Đã Lên Lịch",
+                    tenAdmin,
+                    "Hệ thống",
+                    $"Thời gian dự kiến: {model.ThoiGianSanSang.ToString("g")}"
+                );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Không thể ghi Blockchain khi hoàn thành YC {YeuCauId}", yeuCau.M_YeuCau);
+                }
+
                 TempData["SuccessMessage"] = $"Đã lên lịch thành công cho yêu cầu {yeuCau.M_YeuCau}.";
                 return RedirectToAction(nameof(Index));
             }
@@ -517,6 +536,21 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             {
                 _context.Update(yeuCau);
                 await _context.SaveChangesAsync();
+                
+                    string tenAdmin = User.Identity.Name ?? "Admin_HeThong";
+                try { 
+                    await _traceabilityService.GhiNhatKyAsync(
+                        yeuCau.M_YeuCau,
+                        "Đã Hủy",
+                        tenAdmin,
+                        "Hệ thống",
+                        "Admin đã hủy yêu cầu thu gom này."
+                    );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Không thể ghi Blockchain khi hoàn thành YC {YeuCauId}", id);
+                }
             }
             catch (DbUpdateException ex)
             {
@@ -543,6 +577,23 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             {
                 _context.Update(yeuCau);
                 await _context.SaveChangesAsync();
+
+               
+                    string tenAdmin = User.Identity.Name ?? "NhanVien_ThuGom";
+                try
+                {
+                    await _traceabilityService.GhiNhatKyAsync(
+                        yeuCau.M_YeuCau,
+                        "Đang Thu Gom",
+                        tenAdmin,
+                        "Đang di chuyển",
+                        "Shipper đang trên đường tới địa điểm thu gom."
+                    );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Không thể ghi Blockchain khi hoàn thành YC {YeuCauId}", id);
+                }
             }
             catch (DbUpdateException ex) { _logger.LogError(ex, "Lỗi khi Bắt đầu YC {YeuCauId}", id); }
             return RedirectToAction(nameof(Index));
@@ -554,7 +605,7 @@ namespace DACS.Areas.QuanLyXNK.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MarkComplete(string id, [FromQuery] string targetMaKho)
+        public async Task<IActionResult> MarkComplete(string id, [FromQuery] string targetMaKho, [FromQuery] double doAmThucTe = 15.0)
         {
             if (string.IsNullOrEmpty(id)) return NotFound("Thiếu ID yêu cầu.");
             if (string.IsNullOrEmpty(targetMaKho))
@@ -600,7 +651,21 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                 yeuCau.ThoiGianHoanThanh = DateTime.UtcNow;
                 _context.Update(yeuCau);
                 _logger.LogInformation("Đã chuẩn bị cập nhật trạng thái YC {YeuCauId} thành 'Hoàn thành'.", id);
-
+                string tenAdmin = User.Identity?.Name ?? "Thủ Kho";
+                try
+                {
+                    await _traceabilityService.GhiNhatKyAsync(
+                        yeuCau.M_YeuCau,
+                        "Hoàn Thành & Nhập Kho",
+                        tenAdmin,
+                        $"Kho đích: {targetMaKho}",
+                        $"Độ ẩm thực tế: {doAmThucTe}%"
+                    );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Không thể ghi Blockchain khi hoàn thành YC {YeuCauId}", id);
+                }
                 // <<< SỬA: BỎ LOGIC CỘNG DỒN, THAY BẰNG TẠO MỚI
                 if (yeuCau.ChiTietThuGoms != null && yeuCau.ChiTietThuGoms.Any())
                 {
@@ -630,6 +695,7 @@ namespace DACS.Areas.QuanLyXNK.Controllers
                             KhoiLuongConLai = khoiLuongCollected  // <<< SỬA: Dùng đúng thuộc tính
                         };
                         _context.Add(newLoTonKho);
+                        ct.DoAmThucTe = doAmThucTe;
                         _logger.LogInformation("Chuẩn bị TẠO MỚI LoTonKho: MaLo={MaLo}, Kho={MaKho}, SP={MaSP}, KL={KhoiLuong}", newMaLo, targetMaKho, maSanPham, khoiLuongCollected);
                         // <<< ================= BẮT ĐẦU GỌI BLOCKCHAIN ================= >>>
                         try
@@ -737,6 +803,21 @@ namespace DACS.Areas.QuanLyXNK.Controllers
             {
                 _context.Update(yeuCau);
                 await _context.SaveChangesAsync();
+
+                    string tenAdmin = User.Identity.Name ?? "NhanVien_ThuGom";
+                try { 
+                    await _traceabilityService.GhiNhatKyAsync(
+                        yeuCau.M_YeuCau,
+                        "Thu Gom Thất Bại",
+                        tenAdmin,
+                        "Tại địa điểm Nông dân",
+                        $"Lý do: {failureReason ?? "Không đạt tiêu chuẩn"}"
+                    );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Không thể ghi Blockchain khi hoàn thành YC {YeuCauId}", id);
+                }
             }
             catch (DbUpdateException ex) { _logger.LogError(ex, "Lỗi khi đánh dấu thất bại YC {YeuCauId}", id); }
             return RedirectToAction(nameof(Index));

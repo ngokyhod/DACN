@@ -1,101 +1,109 @@
 ﻿@model DACS.Models.ViewModels.OrderHistoryViewModel
 @{
     ViewData["Title"] = "Lịch Sử Đơn Hàng";
-    // Layout = "_AccountLayout"; // Nếu bạn có layout riêng cho trang tài khoản
+    // Layout = "_AccountLayout"; 
 }
 <div class="container mt-4 account-section">
-    @* Added mt-4 for top margin *@
     <div class="row">
         @* Cột Menu bên trái *@
         <div class="col-lg-3 mb-4 mb-lg-0">
             @await Html.PartialAsync("~/Areas/KhachHang/Views/Shared/_AccountSidebar.cshtml")
         </div>
         <div class="col-lg-9">
-<div class="table-responsive">
-    <table class="table table-hover">
-        <thead>
-            <tr>
-                <th scope="col">Mã Đơn</th>
-                <th scope="col">Ngày Đặt</th>
-                <th scope="col" class="text-end">Tổng Tiền</th>
-                <th scope="col">Trạng Thái</th>
-                <th scope="col"></th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (Model.Orders.Any())
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Mã Đơn</th>
+                            <th scope="col">Ngày Đặt</th>
+                            <th scope="col" class="text-end">Tổng Tiền</th>
+                            <th scope="col">Trạng Thái</th>
+                            <th scope="col" class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Orders.Any())
+                        {
+                            @foreach (var order in Model.Orders)
+                            {
+                                <tr>
+                                    <td><a asp-action="ChiTietDonHang" asp-route-id="@order.OrderId" class="order-id-link fw-bold text-success">#@order.OrderId</a></td>
+                                    <td>@order.OrderDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end fw-bold text-danger">@order.TotalAmount.ToString("N0") đ</td>
+                                    <td>
+                                        @* ĐỒNG BỘ MÀU SẮC TRẠNG THÁI CHUẨN XÁC *@
+                                        @if (order.Status == "Hoàn thành" || order.Status == "Đã giao")
+                                        {
+                                            <span class="badge bg-success">@order.Status</span>
+                                        }
+                                        else if (order.Status == "Đang xử lý" || order.Status == "Đang giao hàng")
+                                        {
+                                            <span class="badge bg-primary">@order.Status</span>
+                                        }
+                                        else if (order.Status == "Đã xác nhận")
+                                        {
+                                            <span class="badge bg-info text-dark">@order.Status</span>
+                                        }
+                                        else if (order.Status == "Chờ xác nhận" || order.Status == "Chưa xử lý")
+                                        {
+                                            <span class="badge bg-warning text-dark">@order.Status</span>
+                                        }
+                                        else if (order.Status == "Đã hủy")
+                                        {
+                                            <span class="badge bg-danger">@order.Status</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@order.Status</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <a asp-action="ChiTietDonHang" asp-route-id="@order.OrderId" class="btn btn-sm btn-outline-success rounded-pill fw-bold">
+                                            <i class="fas fa-search me-1"></i>Chi tiết & Truy xuất
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">Bạn chưa có đơn hàng nào.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            @* Phân trang *@
+            @if (Model.TotalPages > 1)
             {
-                @foreach (var order in Model.Orders)
-                {
-                    <tr>
-                        <td><a asp-action="ChiTietDonHang" asp-route-id="@order.OrderId" class="order-id-link">#@order.OrderId</a></td>
-                        <td>@order.OrderDate.ToString("dd/MM/yyyy")</td>
-                        <td class="text-end">@order.TotalAmount.ToString("N0") đ</td>
-                        <td>
-                            @* Dùng if/else hoặc switch để hiển thị badge màu tương ứng với Status *@
-                            @if (order.Status == "Đã giao")
-                            {
-                                <span class="badge bg-success">@order.Status</span>
-                            }
-                            else if (order.Status == "Đang xử lý")
-                            {
-                                <span class="badge bg-info text-dark">@order.Status</span>
-                            }
-                            else if (order.Status == "Đang giao hàng")
-                            {
-                                <span class="badge bg-primary">@order.Status</span>
-                            }
-                            else if (order.Status == "Đã hủy")
-                            {
-                                <span class="badge bg-danger">@order.Status</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">@order.Status</span>
-                            }
-                        </td>
-                        <td><a asp-action="ChiTietDonHang" asp-route-id="@order.OrderId" class="action-link">Xem</a></td>
-                    </tr>
-                }
+                <nav aria-label="Order history navigation" class="mt-4 d-flex justify-content-center">
+                    <ul class="pagination pagination-sm">
+                        <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                            <a class="page-link" asp-action="LichSuDonHang"
+                               asp-route-page="@(Model.PageIndex - 1)"
+                               asp-route-statusFilter="@Model.CurrentStatusFilter"
+                               asp-route-timeFilter="@Model.CurrentTimeFilter">Trước</a>
+                        </li>
+                        @for (int i = 1; i <= Model.TotalPages; i++)
+                        {
+                            <li class="page-item @(i == Model.PageIndex ? "active" : "")">
+                                <a class="page-link" asp-action="LichSuDonHang"
+                                   asp-route-page="@i"
+                                   asp-route-statusFilter="@Model.CurrentStatusFilter"
+                                   asp-route-timeFilter="@Model.CurrentTimeFilter">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                            <a class="page-link" asp-action="LichSuDonHang"
+                               asp-route-page="@(Model.PageIndex + 1)"
+                               asp-route-statusFilter="@Model.CurrentStatusFilter"
+                               asp-route-timeFilter="@Model.CurrentTimeFilter">Sau</a>
+                        </li>
+                    </ul>
+                </nav>
             }
-            else
-            {
-                <tr>
-                    <td colspan="5" class="text-center">Bạn chưa có đơn hàng nào.</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-</div>
         </div>
     </div>
 </div>
-@if (Model.TotalPages > 1)
-{
-    <nav aria-label="Order history navigation" class="mt-4 d-flex justify-content-center">
-        <ul class="pagination pagination-sm">
-            <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                <a class="page-link" asp-action="LichSuDonHang"
-                   asp-route-page="@(Model.PageIndex - 1)"
-                   asp-route-statusFilter="@Model.CurrentStatusFilter"
-                   asp-route-timeFilter="@Model.CurrentTimeFilter">Trước</a>
-            </li>
-            @for (int i = 1; i <= Model.TotalPages; i++)
-            {
-                <li class="page-item @(i == Model.PageIndex ? "active" : "")">
-                    <a class="page-link" asp-action="LichSuDonHang"
-                       asp-route-page="@i"
-                       asp-route-statusFilter="@Model.CurrentStatusFilter"
-                       asp-route-timeFilter="@Model.CurrentTimeFilter">@i</a>
-                </li>
-            }
-            <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                <a class="page-link" asp-action="LichSuDonHang"
-                   asp-route-page="@(Model.PageIndex + 1)"
-                   asp-route-statusFilter="@Model.CurrentStatusFilter"
-                   asp-route-timeFilter="@Model.CurrentTimeFilter">Sau</a>
-            </li>
-        </ul>
-    </nav>
-   
-}

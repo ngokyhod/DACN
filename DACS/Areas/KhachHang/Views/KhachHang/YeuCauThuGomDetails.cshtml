@@ -10,6 +10,87 @@
     var firstDetail = Model.ChiTietThuGoms?.FirstOrDefault();
 }
 
+<style>
+    /* CSS cho Blockchain Timeline */
+    .timeline-container {
+        position: relative;
+        padding: 20px 0 20px 40px;
+        margin-left: 10px;
+    }
+
+        .timeline-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 15px;
+            width: 3px;
+            background: #e9ecef;
+            border-radius: 3px;
+        }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 30px;
+    }
+
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+
+    .timeline-icon {
+        position: absolute;
+        left: -40px;
+        top: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid #28a745; /* Màu xanh success */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #28a745;
+        font-size: 14px;
+        z-index: 1;
+    }
+
+    .timeline-content {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+        .timeline-content .action-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .timeline-content .time-stamp {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+
+    .bc-data-box {
+        background: #fff;
+        border: 1px dashed #dee2e6;
+        border-radius: 6px;
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+
+    .bc-hash-toggle {
+        cursor: pointer;
+        font-size: 0.8rem;
+        text-decoration: underline;
+    }
+</style>
+
 <div class="container mt-4 account-section">
     <div class="row">
         @* Cột Menu bên trái *@
@@ -39,40 +120,32 @@
 
                 @if (Model != null)
                 {
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-header">
-                            <i class="fas fa-file-alt me-2"></i> Thông tin chung Yêu cầu
+                    <div class="card shadow-sm mb-4 border-0 rounded-3">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="mb-0 text-primary"><i class="fas fa-file-alt me-2"></i> Thông tin chung Yêu cầu</h6>
                         </div>
                         <div class="card-body">
                             <dl class="row definition-list mb-0">
-                                <dt class="col-sm-4">Mã yêu cầu:</dt>
+                                <dt class="col-sm-4 text-muted">Mã yêu cầu:</dt>
                                 <dd class="col-sm-8 fw-bold">#@Model.M_YeuCau</dd>
 
-                                <dt class="col-sm-4">Ngày yêu cầu:</dt>
+                                <dt class="col-sm-4 text-muted">Ngày yêu cầu:</dt>
                                 <dd class="col-sm-8">@Model.NgayYeuCau.ToString("dd/MM/yyyy HH:mm")</dd>
 
-                                <dt class="col-sm-4">Trạng thái:</dt>
-                                <dd class="col-sm-8"><span class="badge @GetStatusBadgeClass(Model.TrangThai)">@Model.TrangThai</span></dd>
+                                <dt class="col-sm-4 text-muted">Trạng thái:</dt>
+                                <dd class="col-sm-8"><span class="badge @GetStatusBadgeClass(Model.TrangThai) px-3 py-2">@Model.TrangThai</span></dd>
 
-                                <dt class="col-sm-4">Thời gian sẵn sàng lấy:</dt>
+                                <dt class="col-sm-4 text-muted">Thời gian sẵn sàng lấy:</dt>
                                 <dd class="col-sm-8">@Model.ThoiGianSanSang.ToString("dd/MM/yyyy HH:mm")</dd>
 
-                                <dt class="col-sm-4">Ghi chú của bạn:</dt>
+                                <dt class="col-sm-4 text-muted">Ghi chú của bạn:</dt>
                                 <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.GhiChu) ? "Không có" : Model.GhiChu)</dd>
-
-                                @* Hiển thị thông tin Khách hàng (nếu cần và đã Include) *@
-                                @*
-                                 <dt class="col-sm-4">Người gửi:</dt>
-                                 <dd class="col-sm-8">@Model.KhachHang?.Ten_KhachHang</dd>
-                                 <dt class="col-sm-4">Số điện thoại liên hệ:</dt>
-                                 <dd class="col-sm-8">@Model.KhachHang?.SDT_KhachHang</dd>
-                                 *@
                             </dl>
                         </div>
                         @* Nút bấm ở Footer Card (nếu trạng thái cho phép) *@
                         @if (Model.TrangThai?.Equals("Chờ xử lý", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            <div class="card-footer text-end bg-light">
+                            <div class="card-footer text-end bg-light border-top-0">
                                 <a asp-action="YeuCauThuGomEdit" asp-controller="KhachHang" asp-area="KhachHang" asp-route-id="@Model.M_YeuCau"
                                    class="btn btn-sm btn-secondary me-2">
                                     <i class="fas fa-edit me-1"></i> Sửa yêu cầu
@@ -87,48 +160,47 @@
 
                     @if (firstDetail != null)
                     {
-                        <div class="card shadow-sm">
-                            <div class="card-header">
-                                <i class="fas fa-box-open me-2"></i> Chi tiết Phụ phẩm
+                        <div class="card shadow-sm mb-4 border-0 rounded-3">
+                            <div class="card-header bg-white border-bottom">
+                                <h6 class="mb-0 text-primary"><i class="fas fa-box-open me-2"></i> Chi tiết Phụ phẩm</h6>
                             </div>
                             <div class="card-body">
-                                <dl class="row definition-list">
-                                    <dt class="col-sm-4">Loại sản phẩm:</dt>
-                                    <dd class="col-sm-8">@(firstDetail.LoaiSanPham?.TenLoai ?? "N/A")</dd>
+                                <dl class="row definition-list mb-0">
+                                    <dt class="col-sm-4 text-muted">Loại sản phẩm:</dt>
+                                    <dd class="col-sm-8 fw-bold">@(firstDetail.LoaiSanPham?.TenLoai ?? "N/A")</dd>
 
-                                    <dt class="col-sm-4">Mô tả:</dt>
+                                    <dt class="col-sm-4 text-muted">Mô tả:</dt>
                                     <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(firstDetail.MoTa) ? "(Không có mô tả)" : firstDetail.MoTa)</dd>
 
-                                    <dt class="col-sm-4">Số lượng:</dt>
-                                    <dd class="col-sm-8">@firstDetail.SoLuong @(firstDetail.DonViTinh?.TenLoaiTinh ?? "")</dd> @* Sửa TenLoaiTinh thành TenDonViTinh nếu cần *@
+                                    <dt class="col-sm-4 text-muted">Số lượng:</dt>
+                                    <dd class="col-sm-8 text-danger fw-bold">@firstDetail.SoLuong @(firstDetail.DonViTinh?.TenLoaiTinh ?? "")</dd>
 
-                                    <dt class="col-sm-4">Giá trị mong muốn:</dt>
-                                    <dd class="col-sm-8">@(firstDetail.GiaTriMongMuon.HasValue ? firstDetail.GiaTriMongMuon.Value.ToString("N0") + " VNĐ" : "Không đề xuất")</dd>
+                                    <dt class="col-sm-4 text-muted">Giá trị mong muốn:</dt>
+                                    <dd class="col-sm-8 text-success fw-bold">@(firstDetail.GiaTriMongMuon.HasValue? firstDetail.GiaTriMongMuon.Value.ToString("N0") + " VNĐ" : "Không đề xuất")</dd>
 
-                                    <dt class="col-sm-4">Đặc tính:</dt>
+                                    <dt class="col-sm-4 text-muted">Đặc tính:</dt>
                                     <dd class="col-sm-8">
                                         @{
                                             var characteristics = new List<string>();
-                                            if (firstDetail.DacTinh_CongKenh) characteristics.Add("Cồng kềnh");
-                                            if (firstDetail.DacTinh_AmUot) characteristics.Add("Ẩm/Ướt");
-                                            if (firstDetail.DacTinh_Kho) characteristics.Add("Khô");
-                                            if (firstDetail.DacTinh_DoAmCao) characteristics.Add("Độ ẩm cao");
-                                            if (firstDetail.DacTinh_TapChat) characteristics.Add("Tạp chất");
-                                            if (firstDetail.DacTinh_DaXuLy) characteristics.Add("Đã xử lý");
+                                            if (firstDetail.DacTinh_CongKenh) characteristics.Add("<span class='badge bg-secondary mb-1'>Cồng kềnh</span>");
+                                            if (firstDetail.DacTinh_AmUot) characteristics.Add("<span class='badge bg-info text-dark mb-1'>Ẩm/Ướt</span>");
+                                            if (firstDetail.DacTinh_Kho) characteristics.Add("<span class='badge bg-warning text-dark mb-1'>Khô</span>");
+                                            if (firstDetail.DacTinh_DoAmCao) characteristics.Add("<span class='badge bg-danger mb-1'>Độ ẩm cao</span>");
+                                            if (firstDetail.DacTinh_TapChat) characteristics.Add("<span class='badge bg-dark mb-1'>Tạp chất</span>");
+                                            if (firstDetail.DacTinh_DaXuLy) characteristics.Add("<span class='badge bg-success mb-1'>Đã xử lý</span>");
                                         }
-                                        @(characteristics.Any() ? string.Join(", ", characteristics) : "Không có")
+                                        @(characteristics.Any() ? Html.Raw(string.Join(" ", characteristics)) : Html.Raw("<span class='text-muted'>Không có</span>"))
                                     </dd>
 
-                                    <dt class="col-sm-4">Hình ảnh:</dt>
-                                    <dd class="col-sm-8">
+                                    <dt class="col-sm-4 text-muted mt-2">Hình ảnh:</dt>
+                                    <dd class="col-sm-8 mt-2">
                                         @if (!string.IsNullOrEmpty(firstDetail.DanhSachHinhAnh))
                                         {
                                             var imagePaths = firstDetail.DanhSachHinhAnh.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                                            <div class="row g-2 mt-1">
+                                            <div class="row g-2">
                                                 @foreach (var path in imagePaths)
                                                 {
                                                     <div class="col-auto">
-                                                        @* Giả sử ảnh có thể xem trực tiếp, cần cấu hình Static Files *@
                                                         <a href="@Url.Content("~" + path)" data-bs-toggle="tooltip" title="Xem ảnh gốc" target="_blank">
                                                             <img src="@Url.Content("~" + path)" alt="Ảnh phụ phẩm" style="max-height: 80px; max-width: 100px; border: 1px solid #dee2e6; border-radius: 0.25rem; object-fit: cover;">
                                                         </a>
@@ -145,14 +217,32 @@
                             </div>
                         </div>
                     }
-                    else
-                    {
-                        <div class="alert alert-warning">Không tìm thấy thông tin chi tiết cho yêu cầu này.</div>
-                    }
+
+                    <div class="card shadow-sm mb-4 border-success rounded-3">
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i> Bằng Chứng Truy Xuất Nguồn Gốc</h6>
+                            <span class="badge bg-light text-success fw-bold"><i class="fas fa-link me-1"></i> Web3 Blockchain</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-light border-success mb-4" role="alert">
+                                <i class="fas fa-info-circle text-success me-2"></i>
+                                Dữ liệu dưới đây được ghi nhận vào Sổ cái điện tử (Blockchain) độc lập. Khi đã được ghi, <strong>không một ai</strong> (kể cả quản trị viên hệ thống) có thể xóa hay sửa đổi. Đây là bằng chứng pháp lý bảo vệ quyền lợi cho bạn.
+                            </div>
+
+                            <div id="blockchain-timeline" class="timeline-container">
+                                <div class="text-center text-success py-4" id="bc-loading">
+                                    <i class="fas fa-circle-notch fa-spin fa-2x mb-2"></i><br />
+                                    <span>Đang đồng bộ dữ liệu Sổ cái...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 }
                 else
                 {
-                    <div class="alert alert-danger">Không thể tải thông tin chi tiết yêu cầu.</div>
+                    <div class="alert alert-danger shadow-sm">
+                        <i class="fas fa-exclamation-triangle me-2"></i> Không thể tải thông tin chi tiết yêu cầu.
+                    </div>
                 }
 
             </div>
@@ -164,10 +254,9 @@
 @functions {
     string GetStatusBadgeClass(string status)
     {
-        status = status?.Trim().ToLower() ?? ""; // Added Trim() for safety
+        status = status?.Trim().ToLower() ?? "";
         switch (status)
         {
-            // ... (Giữ nguyên các case trạng thái như trong LichSuYeuCauThuGom.cshtml) ...
             case "đang giao": case "shipping": case "đang vận chuyển": return "bg-primary";
             case "đã giao": case "delivered": case "hoàn thành": return "bg-success";
             case "đang xử lý": case "processing": return "bg-info text-dark";
@@ -183,14 +272,80 @@
     }
 }
 
-
-@* Optional: Thêm JS nếu cần (ví dụ: cho Tooltip ảnh) *@
 @section Scripts {
     <script>
-        // Khởi tạo tooltip của Bootstrap (nếu dùng)
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-          return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
+        $(document).ready(function () {
+            // Khởi tạo tooltip
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+              return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+
+            // GỌI AJAX ĐỂ VẼ TIMELINE BLOCKCHAIN
+            var requestId = '@Model?.M_YeuCau';
+
+            if(requestId) {
+                $.ajax({
+                    // Đảm bảo URL này trỏ đúng tới hàm GetBlockchainHistory trong KhachHangController của bạn
+                    url: '@Url.Action("GetBlockchainHistory", "KhachHang", new { Area = "KhachHang" })' + '?id=' + requestId,
+                    type: 'GET',
+                    success: function (data) {
+                        var timelineDiv = $('#blockchain-timeline');
+                        timelineDiv.empty(); // Xóa loading spinner
+
+                        if (data && data.length > 0) {
+                            // Sắp xếp dữ liệu từ cũ đến mới (nếu cần)
+                            data.forEach(function (item, index) {
+                                // Gán icon dựa theo từ khóa trong Action
+                                var iconClass = "fa-check";
+                                var actionLower = item.action.toLowerCase();
+                                if(actionLower.includes("hủy") || actionLower.includes("thất bại")) iconClass = "fa-times text-danger";
+                                else if(actionLower.includes("đang")) iconClass = "fa-truck text-primary";
+                                else if(actionLower.includes("kho")) iconClass = "fa-warehouse";
+
+                                var html = `
+                                    <div class="timeline-item">
+                                        <div class="timeline-icon">
+                                            <i class="fas ${iconClass}"></i>
+                                        </div>
+                                        <div class="timeline-content">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <div class="action-title">${item.action}</div>
+                                                <div class="badge bg-success bg-opacity-10 text-success border border-success"><i class="fas fa-link"></i> Đã băm</div>
+                                            </div>
+                                            <div class="time-stamp"><i class="far fa-clock me-1"></i> Ghi nhận lúc: ${item.time}</div>
+
+                                            <div class="bc-data-box">
+                                                <div class="mb-1"><i class="fas fa-user-shield text-secondary me-2" style="width:16px;"></i><strong>Xác thực bởi:</strong> ${item.actor}</div>
+                                                <div class="mb-1"><i class="fas fa-map-marker-alt text-danger me-2" style="width:16px;"></i><strong>Vị trí:</strong> ${item.location || 'Không có'}</div>
+                                                <div><i class="fas fa-file-contract text-info me-2" style="width:16px;"></i><strong>Dữ liệu đính kèm:</strong> <span class="text-dark">${item.details}</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                                timelineDiv.append(html);
+                            });
+                        } else {
+                            timelineDiv.append(`
+                                <div class="text-center text-muted p-4 bg-light rounded border border-dashed">
+                                    <i class="fas fa-history fa-2x mb-3 text-secondary"></i><br/>
+                                    Lô hàng này hiện chưa có dữ liệu giao dịch nào được ghi lên mạng lưới Blockchain.
+                                </div>
+                            `);
+                            timelineDiv.css('border-left', 'none');
+                            timelineDiv.css('padding-left', '0');
+                        }
+                    },
+                    error: function () {
+                        $('#bc-loading').html(`
+                            <div class="text-danger p-3 bg-danger bg-opacity-10 rounded">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i><br />
+                                Lỗi kết nối đến nút mạng Ganache. Vui lòng kiểm tra lại cấu hình Blockchain.
+                            </div>
+                        `);
+                    }
+                });
+            }
+        });
     </script>
 }

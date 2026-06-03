@@ -24,6 +24,7 @@ namespace DACS.Controllers
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
         private readonly FirebaseSyncService _firebaseSync;
+        private readonly TraceabilityService _traceabilityService;
         public ThuGomController(
             IConfiguration configuration,
             ILogger<ThuGomController> logger,
@@ -31,7 +32,8 @@ namespace DACS.Controllers
             IWebHostEnvironment webHostEnvironment,
             UserManager<ApplicationUser> userManager,
             IEmailService emailService,
-            FirebaseSyncService firebaseSync)
+            FirebaseSyncService firebaseSync,
+            TraceabilityService traceabilityService)
         {
             _configuration = configuration;
             _logger = logger;
@@ -40,6 +42,7 @@ namespace DACS.Controllers
             _userManager = userManager;
             _emailService = emailService;
             _firebaseSync = firebaseSync;
+            _traceabilityService = traceabilityService;
         }
 
         [HttpPost]
@@ -175,6 +178,24 @@ namespace DACS.Controllers
                 _context.YeuCauThuGoms.Add(yeuCau);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+                try
+                {
+                    var loaiSpBC = await _context.LoaiSanPhams.FindAsync(model.M_LoaiSP);
+                    string tenKhachHangBC = khachHang.Ten_KhachHang ?? "Khách hàng hệ thống";
+                    string tenLoaiBC = loaiSpBC?.TenLoai ?? model.M_LoaiSP;
+
+                    await _traceabilityService.GhiNhatKyAsync(
+                        yeuCau.M_YeuCau,                                 // Mã Yêu Cầu
+                        "Gửi yêu cầu thu gom",                           // Hành động
+                        tenKhachHangBC,                                  // Người thực hiện (Nông dân/Khách)
+                        "Hệ thống Website",                              // Vị trí
+                        $"Đã gửi yêu cầu thu gom {model.ByproductQuantity} kg phụ phẩm loại {tenLoaiBC}" // Chi tiết
+                    );
+                }
+                catch (Exception bcEx)
+                {
+                    _logger.LogError(bcEx, "Lỗi ghi Blockchain khi gửi yêu cầu thu gom {YeuCauId}", yeuCau.M_YeuCau);
+                }
                 try
                 {
                     // A. Lấy thông tin Tên (Vì ViewModel chỉ có Mã)
@@ -484,7 +505,6 @@ namespace DACS.Controllers
         [HttpPost("du-doan-gia")]
         public async Task<IActionResult> PredictPrice([FromBody] PriceRequest req)
         {
-            
             var sanPham = _context.SanPhams.FirstOrDefault(p => p.M_SanPham == req.NhomSanPham);
 
             if (sanPham == null)
@@ -511,27 +531,83 @@ namespace DACS.Controllers
                     khoGanNhat = k;
                 }
             }
-            double roadDistanceKm = minDistance * 1.3; 
+            double roadDistanceKm = minDistance * 1.3;
             double shippingFee = CalculateShipping(roadDistanceKm, req.KhoiLuong);
-            
-            double doAmChuan = 15.0; 
+
+            // =================================================================
+            // SỬA LỖI 1: XỬ LÝ ĐỘ ẨM CHUẨN ĐỘNG THEO TỪNG LOẠI PHỤ PHẨM
+            // =================================================================
+            double doAmChuan = 15.0; // Mặc định cho nhóm khô (Trấu, Lõi ngô, Vỏ cafe)
+            string tenSp = sanPham.TenSanPham.ToLower();
+
+            if (tenSp.Contains("bã mía"))
+            {
+                doAmChuan = 50.0; // Bã mía tươi độ ẩm tự nhiên khoảng 45-55%
+            }
+            else if (tenSp.Contains("vỏ sắn") || tenSp.Contains("tươi"))
+            {
+                doAmChuan = 65.0; // Vỏ sắn tươi hoặc hàng tươi rất ướt
+            }
+            // Lời khuyên: Sau này bạn nên thêm cột DoAmTieuChuan vào bảng SanPhams trong DB
+            // Khi đó chỉ cần gọi: doAmChuan = sanPham.DoAmTieuChuan ?? 15.0;
+            // =================================================================
+
             double chenhLechDoAm = req.DoAmThucTe - doAmChuan;
             double heSoDoAm = 1.0;
 
-            if (chenhLechDoAm > 0) 
-                heSoDoAm = 1.0 - (chenhLechDoAm * 0.012); 
-            else 
+            if (chenhLechDoAm > 0)
+                heSoDoAm = 1.0 - (chenhLechDoAm * 0.012);
+            else
                 heSoDoAm = 1.0 + (Math.Abs(chenhLechDoAm) * 0.005);
 
             if (heSoDoAm < 0.6) heSoDoAm = 0.6;
             double HE_SO_BIEN_LOI_NHUAN = 0.8;
-          
+
             double giaCoSoThuMua = (double)sanPham.Gia * HE_SO_BIEN_LOI_NHUAN;
             double donGiaUocTinh = giaCoSoThuMua * heSoMuaVu * heSoDoAm;
 
             double tongGiaTriHang = donGiaUocTinh * req.KhoiLuong;
 
             double giaCuoiCung = Math.Max(0, tongGiaTriHang - shippingFee);
+
+            // =================================================================
+            // SỬA LỖI 2: AI TƯ VẤN NGỮ CẢNH THỜI TIẾT TƯƠNG ĐỐI THEO ĐỘ ẨM CHUẨN
+            // =================================================================
+            string weatherWarning = "";
+            var weatherData = await GetWeatherConditionAsync(userLat, userLng);
+            string weatherCondition = weatherData.CurrentWeather;
+            bool hasRainedRecently = weatherData.HasRainedRecently;
+
+            // Biến định vị tình trạng hàng hóa hiện tại (Relative Logic)
+            bool isDatChuan = req.DoAmThucTe <= (doAmChuan + 5.0); // Hàng đạt chuẩn hoặc gần chuẩn
+            bool isQuaUot = req.DoAmThucTe > (doAmChuan + 10.0);   // Hàng bị ướt hơn bình thường rất nhiều
+
+            // Báo hàng ĐẠT CHUẨN, Đang Mưa -> Khuyên che đậy
+            if (isDatChuan && weatherCondition == "Rainy")
+            {
+                weatherWarning = $"Khu vực của bạn đang có mưa. Phụ phẩm đang ở độ ẩm khá tốt ({req.DoAmThucTe}%), hãy đảm bảo che chắn kỹ để không bị hút ẩm ngược làm giảm giá trị nhé!";
+            }
+            // Báo hàng ĐẠT CHUẨN, Đang NẮNG, nhưng QUÁ KHỨ CÓ MƯA LỚN -> Cảnh báo "Ẩm ngầm"
+            else if (isDatChuan && weatherCondition == "Sunny" && hasRainedRecently)
+            {
+                weatherWarning = "Trời đang nắng, nhưng dữ liệu vệ tinh cho thấy khu vực này có mưa lớn trong 3 ngày qua. AI lưu ý: Hãy kiểm tra kỹ hiện tượng 'ẩm ngầm' bên trong lõi lô hàng để đảm bảo chuẩn chất lượng.";
+            }
+            // Báo hàng ĐẠT CHUẨN, Đang NẮNG, Quá khứ KHÔNG MƯA -> Xác nhận uy tín
+            else if (isDatChuan && weatherCondition == "Sunny" && !hasRainedRecently)
+            {
+                weatherWarning = $"Tuyệt vời! Lô hàng của bạn có độ ẩm lý tưởng ({req.DoAmThucTe}%). Dữ liệu vệ tinh xác nhận khu vực nắng ráo liên tục, rất tốt để duy trì chất lượng ở mức giá cao nhất.";
+            }
+            // Báo hàng QUÁ ƯỚT, Đang NẮNG -> Khuyên đem phơi
+            else if (isQuaUot && weatherCondition == "Sunny")
+            {
+                weatherWarning = $"Khu vực đang có nắng tốt. Lô hàng của bạn đang ướt hơn bình thường ({req.DoAmThucTe}% so với chuẩn {doAmChuan}%). Bạn có thể tận dụng thời tiết để phơi sấy, hệ thống sẽ thu mua với giá cao hơn!";
+            }
+            // Báo hàng QUÁ ƯỚT, Đang MƯA -> Cảnh báo hỏng/lên men
+            else if (isQuaUot && weatherCondition == "Rainy")
+            {
+                weatherWarning = $"Cảnh báo rủi ro: Lô hàng đang rất ướt ({req.DoAmThucTe}%) và khu vực lại đang mưa. Vui lòng tìm cách thông gió hoặc sấy để tránh nấm mốc hoặc lên men làm hỏng lô hàng.";
+            }
+            // =================================================================
 
             return Ok(new
             {
@@ -541,11 +617,14 @@ namespace DACS.Controllers
 
                 GiaGocTaiKho = (double)sanPham.Gia,
                 HeSoMuaVu = heSoMuaVu,
-                HeSoDoAm = Math.Round(heSoDoAm, 2), 
+                HeSoDoAm = Math.Round(heSoDoAm, 2),
 
-                PhiVanChuyen = Math.Round(shippingFee), 
+                PhiVanChuyen = Math.Round(shippingFee),
 
-                TotalPrice = Math.Round(giaCuoiCung / 1000) * 1000
+                TotalPrice = Math.Round(giaCuoiCung / 1000) * 1000,
+
+                // Trả thêm dòng Cảnh báo này về cho JavaScript xử lý giao diện
+                WeatherWarning = weatherWarning
             });
         }
         //tính km khoảng cách
@@ -629,6 +708,55 @@ namespace DACS.Controllers
 
             return basePrice + ((km - 2) * pricePerKm);
         }
-       
+        // --- TÍNH NĂNG AI: LẤY THỜI TIẾT HIỆN TẠI VÀ LỊCH SỬ 3 NGÀY QUÁ KHỨ ---
+        private async Task<(string CurrentWeather, bool HasRainedRecently)> GetWeatherConditionAsync(double lat, double lng)
+        {
+            if (lat == 0 || lng == 0) return ("Unknown", false);
+
+            try
+            {
+                using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(5);
+
+                // Gọi API lấy thời tiết HIỆN TẠI và LƯỢNG MƯA 3 NGÀY TRƯỚC
+                var url = $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&current_weather=true&daily=precipitation_sum&past_days=3&forecast_days=1&timezone=auto";
+                var response = await client.GetStringAsync(url);
+                dynamic data = JsonConvert.DeserializeObject(response);
+
+                string currentWeather = "Unknown";
+                bool hasRainedRecently = false;
+
+                // 1. Đọc thời tiết hiện tại
+                if (data != null && data.current_weather != null)
+                {
+                    int weatherCode = data.current_weather.weathercode;
+                    if (weatherCode <= 3) currentWeather = "Sunny";
+                    if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) currentWeather = "Rainy";
+                }
+
+                // 2. Đọc lịch sử lượng mưa 3 ngày qua
+                if (data != null && data.daily != null && data.daily.precipitation_sum != null)
+                {
+                    double totalRain = 0;
+                    foreach (var rain in data.daily.precipitation_sum)
+                    {
+                        if (rain != null) totalRain += (double)rain;
+                    }
+
+                    // Nếu tổng lượng mưa 3 ngày qua lớn hơn 10mm (tương đương có mưa vừa/to)
+                    if (totalRain > 10.0)
+                    {
+                        hasRainedRecently = true;
+                    }
+                }
+
+                return (currentWeather, hasRainedRecently);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Không thể lấy dữ liệu thời tiết cho tọa độ {Lat}, {Lng}", lat, lng);
+                return ("Error", false);
+            }
+        }
     }
 }

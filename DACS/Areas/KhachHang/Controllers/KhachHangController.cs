@@ -28,7 +28,8 @@ namespace DACS.Areas.KhachHang.Controllers
         private readonly ILogger<KhachHangController> _logger;
         private readonly ISanPhamRepository _sanPhamRepo; // <<< Inject Repository NguoiMu
         private readonly IThuGomRepository _thuGomRepository;
-                private readonly AIMatchingService _aiMatchingService;
+        private readonly AIMatchingService _aiMatchingService;
+        private readonly TraceabilityService _traceabilityService;
         public KhachHangController(
       ApplicationDbContext context, // <<< Thêm lại tham số context
          UserManager<ApplicationUser> userManager,
@@ -37,7 +38,8 @@ namespace DACS.Areas.KhachHang.Controllers
       ILogger<KhachHangController> logger,
       ISanPhamRepository sanPhamRepo,
             IThuGomRepository thuGomRepository,
-            AIMatchingService aiMatchingService
+            AIMatchingService aiMatchingService,
+            TraceabilityService traceabilityService
       )
         {
             _context = context; // <<< Gán lại context
@@ -47,7 +49,8 @@ namespace DACS.Areas.KhachHang.Controllers
             _logger = logger;
             _sanPhamRepo = sanPhamRepo;
             _thuGomRepository = thuGomRepository;
-                        _aiMatchingService = aiMatchingService;
+            _aiMatchingService = aiMatchingService;
+            _traceabilityService = traceabilityService;
         }
 
         public async Task<IActionResult> Index()
@@ -479,7 +482,7 @@ namespace DACS.Areas.KhachHang.Controllers
             if (nguoiMuaProfile == null)
             {
                 TempData["InfoMessage"] = "Không tìm thấy hồ sơ, đang kiểm tra..."; // Thông báo nhẹ nhàng
-               return RedirectToAction(nameof(HoSoCaNhan));
+                return RedirectToAction(nameof(HoSoCaNhan));
             }
 
             // Map sang ViewModel để hiển thị form Edit
@@ -495,7 +498,7 @@ namespace DACS.Areas.KhachHang.Controllers
                 Edit_DiaChi_DuongApThon = nguoiMuaProfile.DiaChi_DuongApThon,
                 Gender = nguoiMuaProfile.Gender,
                 AvatarUrl = nguoiMuaProfile.AvatarUrl
-            };
+            };
             var provinces = await _context.TinhThanhPhos.OrderBy(p => p.TenTinh).ToListAsync();
             // Truyền MaTinh hiện tại của người dùng làm selected value
             ViewBag.ProvinceOptions = new SelectList(provinces, "MaTinh", "TenTinh", viewModel.Edit_DiaChi_TinhTP);
@@ -615,7 +618,7 @@ namespace DACS.Areas.KhachHang.Controllers
                     var filePath = Path.Combine(uploadsFolder, uniqueFileName);
                     Directory.CreateDirectory(uploadsFolder); // Tạo thư mục nếu chưa có
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
-                   {
+                    {
                         await model.ProfileImageFile.CopyToAsync(fileStream);
                     }
                     var newAvatarUrl = "/images/avatars/" + uniqueFileName; // Đường dẫn lưu trong DB
@@ -674,166 +677,166 @@ namespace DACS.Areas.KhachHang.Controllers
 
 
 
-                  [HttpGet]
-          public async Task<IActionResult> DangKyDoanhNghiep()
-          {
-              var userId = _userManager.GetUserId(User);
-              if (string.IsNullOrEmpty(userId)) return NotFound();
+        [HttpGet]
+        public async Task<IActionResult> DangKyDoanhNghiep()
+        {
+            var userId = _userManager.GetUserId(User);
+            if (string.IsNullOrEmpty(userId)) return NotFound();
 
-              var khachHang = await _context.KhachHangs
-                  .Include(kh => kh.TinhThanhPho)
-                  .Include(kh => kh.QuanHuyen)
-                  .Include(kh => kh.XaPhuong)
-                  .FirstOrDefaultAsync(kh => kh.UserId == userId);
-              if (khachHang == null) return NotFound();
+            var khachHang = await _context.KhachHangs
+                .Include(kh => kh.TinhThanhPho)
+                .Include(kh => kh.QuanHuyen)
+                .Include(kh => kh.XaPhuong)
+                .FirstOrDefaultAsync(kh => kh.UserId == userId);
+            if (khachHang == null) return NotFound();
 
-              var model = new DangKyDoanhNghiepViewModel
-              {
-                  TenDoanhNghiep = khachHang.TenDoanhNghiep ?? "",
-                  LinhVucHoatDong = khachHang.LinhVucHoatDong ?? "",
-                  NhuCauChinh = khachHang.NhuCauChinh ?? "",
-                  MaTinhDoanhNghiep = khachHang.MaTinhDoanhNghiep ?? khachHang.MaTinh ?? "",
-                  MaQuanDoanhNghiep = khachHang.MaQuanDoanhNghiep ?? khachHang.MaQuan ?? "",
-                  MaXaDoanhNghiep = khachHang.MaXaDoanhNghiep ?? khachHang.MaXa ?? "",
-                  DiaChiDuongDoanhNghiep = khachHang.DiaChiDuongDoanhNghiep ?? khachHang.DiaChi_DuongApThon ?? "",
-                  DiaChiDoanhNghiep = khachHang.DiaChiDoanhNghiep,
-                  EnterpriseLat = khachHang.EnterpriseLat,
-                  EnterpriseLng = khachHang.EnterpriseLng,
-                  GiayPhepKinhDoanhUrl = khachHang.GiayPhepKinhDoanhUrl
-              };
+            var model = new DangKyDoanhNghiepViewModel
+            {
+                TenDoanhNghiep = khachHang.TenDoanhNghiep ?? "",
+                LinhVucHoatDong = khachHang.LinhVucHoatDong ?? "",
+                NhuCauChinh = khachHang.NhuCauChinh ?? "",
+                MaTinhDoanhNghiep = khachHang.MaTinhDoanhNghiep ?? khachHang.MaTinh ?? "",
+                MaQuanDoanhNghiep = khachHang.MaQuanDoanhNghiep ?? khachHang.MaQuan ?? "",
+                MaXaDoanhNghiep = khachHang.MaXaDoanhNghiep ?? khachHang.MaXa ?? "",
+                DiaChiDuongDoanhNghiep = khachHang.DiaChiDuongDoanhNghiep ?? khachHang.DiaChi_DuongApThon ?? "",
+                DiaChiDoanhNghiep = khachHang.DiaChiDoanhNghiep,
+                EnterpriseLat = khachHang.EnterpriseLat,
+                EnterpriseLng = khachHang.EnterpriseLng,
+                GiayPhepKinhDoanhUrl = khachHang.GiayPhepKinhDoanhUrl
+            };
 
-              ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
-              ViewBag.Provinces = await _context.TinhThanhPhos
-                  .OrderBy(t => t.TenTinh)
-                  .Select(t => new { id = t.MaTinh, name = t.TenTinh })
-                  .ToListAsync();
-              ViewBag.EnterpriseReviewStatus = khachHang.IsEnterpriseVerified
-                  ? "approved"
-                  : !string.IsNullOrWhiteSpace(khachHang.TenDoanhNghiep)
-                      ? "pending"
-                      : "new";
+            ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
+            ViewBag.Provinces = await _context.TinhThanhPhos
+                .OrderBy(t => t.TenTinh)
+                .Select(t => new { id = t.MaTinh, name = t.TenTinh })
+                .ToListAsync();
+            ViewBag.EnterpriseReviewStatus = khachHang.IsEnterpriseVerified
+                ? "approved"
+                : !string.IsNullOrWhiteSpace(khachHang.TenDoanhNghiep)
+                    ? "pending"
+                    : "new";
 
-              return View(model);
-          }
+            return View(model);
+        }
 
-          [HttpPost]
-          public async Task<IActionResult> DangKyDoanhNghiep(DangKyDoanhNghiepViewModel model)
-          {
-              if (TryReadCoordinateFromForm("EnterpriseLat", out var parsedLat))
-              {
-                  model.EnterpriseLat = parsedLat;
-                  ModelState.Remove(nameof(model.EnterpriseLat));
-              }
+        [HttpPost]
+        public async Task<IActionResult> DangKyDoanhNghiep(DangKyDoanhNghiepViewModel model)
+        {
+            if (TryReadCoordinateFromForm("EnterpriseLat", out var parsedLat))
+            {
+                model.EnterpriseLat = parsedLat;
+                ModelState.Remove(nameof(model.EnterpriseLat));
+            }
 
-              if (TryReadCoordinateFromForm("EnterpriseLng", out var parsedLng))
-              {
-                  model.EnterpriseLng = parsedLng;
-                  ModelState.Remove(nameof(model.EnterpriseLng));
-              }
+            if (TryReadCoordinateFromForm("EnterpriseLng", out var parsedLng))
+            {
+                model.EnterpriseLng = parsedLng;
+                ModelState.Remove(nameof(model.EnterpriseLng));
+            }
 
-              if (ModelState.IsValid)
-              {
-                  var userId = _userManager.GetUserId(User);
-                  var khachHang = await _context.KhachHangs
-                      .FirstOrDefaultAsync(kh => kh.UserId == userId);
-                  if (khachHang != null)
-                  {
-                      var provinceName = await _context.TinhThanhPhos
-                          .Where(t => t.MaTinh == model.MaTinhDoanhNghiep)
-                          .Select(t => t.TenTinh)
-                          .FirstOrDefaultAsync();
-                      var districtName = await _context.QuanHuyens
-                          .Where(q => q.MaQuan == model.MaQuanDoanhNghiep)
-                          .Select(q => q.TenQuan)
-                          .FirstOrDefaultAsync();
-                      var wardName = await _context.XaPhuongs
-                          .Where(x => x.MaXa == model.MaXaDoanhNghiep)
-                          .Select(x => x.TenXa)
-                          .FirstOrDefaultAsync();
+            if (ModelState.IsValid)
+            {
+                var userId = _userManager.GetUserId(User);
+                var khachHang = await _context.KhachHangs
+                    .FirstOrDefaultAsync(kh => kh.UserId == userId);
+                if (khachHang != null)
+                {
+                    var provinceName = await _context.TinhThanhPhos
+                        .Where(t => t.MaTinh == model.MaTinhDoanhNghiep)
+                        .Select(t => t.TenTinh)
+                        .FirstOrDefaultAsync();
+                    var districtName = await _context.QuanHuyens
+                        .Where(q => q.MaQuan == model.MaQuanDoanhNghiep)
+                        .Select(q => q.TenQuan)
+                        .FirstOrDefaultAsync();
+                    var wardName = await _context.XaPhuongs
+                        .Where(x => x.MaXa == model.MaXaDoanhNghiep)
+                        .Select(x => x.TenXa)
+                        .FirstOrDefaultAsync();
 
-                      khachHang.MaTinhDoanhNghiep = model.MaTinhDoanhNghiep;
-                      khachHang.MaQuanDoanhNghiep = model.MaQuanDoanhNghiep;
-                      khachHang.MaXaDoanhNghiep = model.MaXaDoanhNghiep;
-                      khachHang.DiaChiDuongDoanhNghiep = model.DiaChiDuongDoanhNghiep;
-                      khachHang.TenDoanhNghiep = model.TenDoanhNghiep;
-                      khachHang.LinhVucHoatDong = model.LinhVucHoatDong;
-                      khachHang.NhuCauChinh = model.NhuCauChinh;
-                      khachHang.DiaChiDoanhNghiep = string.Join(", ", new[]
-                      {
+                    khachHang.MaTinhDoanhNghiep = model.MaTinhDoanhNghiep;
+                    khachHang.MaQuanDoanhNghiep = model.MaQuanDoanhNghiep;
+                    khachHang.MaXaDoanhNghiep = model.MaXaDoanhNghiep;
+                    khachHang.DiaChiDuongDoanhNghiep = model.DiaChiDuongDoanhNghiep;
+                    khachHang.TenDoanhNghiep = model.TenDoanhNghiep;
+                    khachHang.LinhVucHoatDong = model.LinhVucHoatDong;
+                    khachHang.NhuCauChinh = model.NhuCauChinh;
+                    khachHang.DiaChiDoanhNghiep = string.Join(", ", new[]
+                    {
                           model.DiaChiDuongDoanhNghiep?.Trim(),
                           wardName,
                           districtName,
                           provinceName
                       }.Where(part => !string.IsNullOrWhiteSpace(part)));
-                      khachHang.TinhThanhDoanhNghiep = provinceName;
-                      khachHang.EnterpriseLat = model.EnterpriseLat;
-                      khachHang.EnterpriseLng = model.EnterpriseLng;
-                      khachHang.IsEnterpriseVerified = false;
+                    khachHang.TinhThanhDoanhNghiep = provinceName;
+                    khachHang.EnterpriseLat = model.EnterpriseLat;
+                    khachHang.EnterpriseLng = model.EnterpriseLng;
+                    khachHang.IsEnterpriseVerified = false;
 
-                      // Xử lý upload ảnh
-                      if (model.GiayPhepKinhDoanh != null)
-                      {
-                          string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads/giayphep");
-                          Directory.CreateDirectory(uploadsFolder);
-                          string uniqueFileName = Guid.NewGuid().ToString() + "_" + model.GiayPhepKinhDoanh.FileName;
-                          string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                          using (var fileStream = new FileStream(filePath, FileMode.Create))
-                          {
-                              await model.GiayPhepKinhDoanh.CopyToAsync(fileStream);
-                          }
-                          khachHang.GiayPhepKinhDoanhUrl = "/uploads/giayphep/" + uniqueFileName;
-                      }
+                    // Xử lý upload ảnh
+                    if (model.GiayPhepKinhDoanh != null)
+                    {
+                        string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads/giayphep");
+                        Directory.CreateDirectory(uploadsFolder);
+                        string uniqueFileName = Guid.NewGuid().ToString() + "_" + model.GiayPhepKinhDoanh.FileName;
+                        string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await model.GiayPhepKinhDoanh.CopyToAsync(fileStream);
+                        }
+                        khachHang.GiayPhepKinhDoanhUrl = "/uploads/giayphep/" + uniqueFileName;
+                    }
 
-                      _context.Update(khachHang);
-                      await _context.SaveChangesAsync();
+                    _context.Update(khachHang);
+                    await _context.SaveChangesAsync();
 
-                      TempData["SuccessMessage"] = "Đăng ký thông tin doanh nghiệp thành công. Vui lòng chờ admin duyệt!";
-                      return RedirectToAction("HoSoCaNhan");
-                  }
+                    TempData["SuccessMessage"] = "Đăng ký thông tin doanh nghiệp thành công. Vui lòng chờ admin duyệt!";
+                    return RedirectToAction("HoSoCaNhan");
+                }
 
-                  TempData["ErrorMessage"] = "Không tìm thấy hồ sơ khách hàng để cập nhật thông tin doanh nghiệp.";
-              }
+                TempData["ErrorMessage"] = "Không tìm thấy hồ sơ khách hàng để cập nhật thông tin doanh nghiệp.";
+            }
 
-              if (!ModelState.IsValid)
-              {
-                  TempData["ErrorMessage"] = "Chưa thể lưu đăng ký doanh nghiệp. Vui lòng kiểm tra lại các trường đang báo lỗi.";
-              }
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Chưa thể lưu đăng ký doanh nghiệp. Vui lòng kiểm tra lại các trường đang báo lỗi.";
+            }
 
-              ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
-              ViewBag.Provinces = await _context.TinhThanhPhos
-                  .OrderBy(t => t.TenTinh)
-                  .Select(t => new { id = t.MaTinh, name = t.TenTinh })
-                  .ToListAsync();
-              ViewBag.EnterpriseReviewStatus = "new";
-              return View(model);
-          }
+            ViewBag.AvailableProducts = await _context.SanPhams.Select(sp => sp.TenSanPham).Distinct().ToListAsync();
+            ViewBag.Provinces = await _context.TinhThanhPhos
+                .OrderBy(t => t.TenTinh)
+                .Select(t => new { id = t.MaTinh, name = t.TenTinh })
+                .ToListAsync();
+            ViewBag.EnterpriseReviewStatus = "new";
+            return View(model);
+        }
 
-          private bool TryReadCoordinateFromForm(string fieldName, out double? coordinate)
-          {
-              coordinate = null;
+        private bool TryReadCoordinateFromForm(string fieldName, out double? coordinate)
+        {
+            coordinate = null;
 
-              if (!Request.HasFormContentType)
-              {
-                  return false;
-              }
+            if (!Request.HasFormContentType)
+            {
+                return false;
+            }
 
-              var rawValue = Request.Form[fieldName].ToString()?.Trim();
-              if (string.IsNullOrWhiteSpace(rawValue))
-              {
-                  return false;
-              }
+            var rawValue = Request.Form[fieldName].ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return false;
+            }
 
-              if (double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var invariantValue) ||
-                  double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out invariantValue))
-              {
-                  coordinate = invariantValue;
-                  return true;
-              }
+            if (double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var invariantValue) ||
+                double.TryParse(rawValue, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out invariantValue))
+            {
+                coordinate = invariantValue;
+                return true;
+            }
 
-              return false;
-          }
+            return false;
+        }
 
-        
+
         public async Task<IActionResult> LichSuDonHang(string statusFilter, string timeFilter, int page = 1)
         {
             var userId = _userManager.GetUserId(User);
@@ -1433,11 +1436,11 @@ namespace DACS.Areas.KhachHang.Controllers
             }
 
         }
-        [HttpGet]
+        [HttpGet]
         public async Task<IActionResult> Create() // Đổi tên từ ThuGom thành Create
 
         {
-            await LoadDropdownDataAsync(); // Gọi hàm helper load dropdown
+            await LoadDropdownDataAsync(); // Gọi hàm helper load dropdown
             return View("Create", new ThuGomViewModel()); // Trả về View Create.cshtml
 
         }
@@ -1881,9 +1884,9 @@ namespace DACS.Areas.KhachHang.Controllers
 
             {
 
-                // Cập nhật YeuCauThuGom
+                // Cập nhật YeuCauThuGom
 
-              yeuCauGoc.MaTinh = model.SupplierProvince;
+                yeuCauGoc.MaTinh = model.SupplierProvince;
 
                 yeuCauGoc.MaQuan = model.SupplierDistrict;
 
@@ -1895,11 +1898,11 @@ namespace DACS.Areas.KhachHang.Controllers
 
                 yeuCauGoc.Lng = model.Lng;
 
-                yeuCauGoc.ThoiGianSanSang = model.PickupReadyTime.Value;
+                yeuCauGoc.ThoiGianSanSang = model.PickupReadyTime.Value;
 
                 yeuCauGoc.GhiChu = model.SupplierNotes;
 
-                chiTietGoc.M_LoaiSP = model.M_LoaiSP; // Cập nhật loại SP
+                chiTietGoc.M_LoaiSP = model.M_LoaiSP; // Cập nhật loại SP
                 chiTietGoc.M_DonViTinh = model.ByproductUnit;
 
                 chiTietGoc.SoLuong = (int)model.ByproductQuantity.Value;
@@ -2245,7 +2248,32 @@ namespace DACS.Areas.KhachHang.Controllers
                 return Json(new List<object>()); // Trả về rỗng khi lỗi
             }
         }
+        [HttpGet]
+        public async Task<IActionResult> GetBlockchainHistory(string id)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id)) return BadRequest("Thiếu ID");
 
+                // Thêm .Trim() cho chắc ăn
+                var history = await _traceabilityService.LayLichSuAsync(id.Trim());
+
+                var formattedHistory = history.Select(h => new {
+                    action = h.Action,
+                    actor = h.Actor,
+                    location = h.Location,
+                    details = h.Details,
+                    // SỬA Ở ĐÂY: Thêm (long) vào trước h.Timestamp
+                    time = DateTimeOffset.FromUnixTimeSeconds((long)h.Timestamp).ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                }).ToList();
+
+                return Json(formattedHistory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi API GetBlockchainHistory");
+                return StatusCode(500, ex.Message);
+            }
+        }
     }
-
-}
+    }

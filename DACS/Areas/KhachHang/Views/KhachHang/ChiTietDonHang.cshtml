@@ -1,7 +1,25 @@
-﻿@model DACS.Models.DonHang // Model bây giờ là DonHang (Đơn hàng chính)
+﻿@model DACS.Models.DonHang
+@using DACS.Services
+@inject TraceabilityService TraceabilityService
 @{
-    // ViewData["Title"] được set từ Controller
-    // Layout = "_AccountLayout"; // Hoặc Layout chung của bạn
+    ViewData["Title"] = $"Chi Tiết Đơn Hàng {Model.M_DonHang}";
+    // Layout = "_AccountLayout";
+
+    // GỌI BLOCKCHAIN TRỰC TIẾP TỪ VIEW
+    var lichSuBlockchain = await TraceabilityService.LayLichSuAsync(Model.M_DonHang);
+    // Đảo ngược list để hành động mới nhất hiện lên trên cùng
+    lichSuBlockchain.Reverse();
+
+    // HÀM ĐỒNG BỘ MÀU TRẠNG THÁI
+    string GetStatusColor(string status)
+    {
+        if (status == "Hoàn thành" || status == "Đã giao") return "bg-success";
+        if (status == "Đang xử lý" || status == "Đang giao hàng") return "bg-primary";
+        if (status == "Đã xác nhận") return "bg-info text-dark";
+        if (status == "Chờ xác nhận" || status == "Chưa xử lý") return "bg-warning text-dark";
+        if (status == "Đã hủy") return "bg-danger";
+        return "bg-secondary";
+    }
 }
 
 <!DOCTYPE html>
@@ -12,23 +30,25 @@
     <title>@ViewData["Title"]</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    @* <link rel="stylesheet" href="~/css/yourSite.css" /> *@
     <style>
+        body {
+            background-color: #f4f6f9;
+        }
+
         .order-detail-container {
-            padding: 20px;
-            background-color: #f8f9fa;
+            padding: 20px 0;
         }
 
         .order-detail-card {
             background-color: #fff;
             padding: 1.5rem;
-            border-radius: 0.375rem;
+            border-radius: 0.5rem;
             box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
             margin-bottom: 1.5rem;
         }
 
         .info-label {
-            font-weight: 500;
+            font-weight: 600;
             color: #495057;
         }
 
@@ -44,36 +64,88 @@
             margin-right: 10px;
         }
 
-        .status-badge {
-            font-size: 0.9em;
+        /* CSS CHO KHUNG CUỘN BLOCKCHAIN (SCROLLBAR) */
+        .timeline-scroll-container {
+            max-height: 450px; /* Giới hạn chiều cao */
+            overflow-y: auto; /* Hiện thanh cuộn dọc khi dữ liệu dài */
+            padding-right: 10px;
+        }
+            /* Tùy chỉnh thanh cuộn cho đẹp (Chrome/Edge/Safari) */
+            .timeline-scroll-container::-webkit-scrollbar {
+                width: 6px;
+            }
+
+            .timeline-scroll-container::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 4px;
+            }
+
+            .timeline-scroll-container::-webkit-scrollbar-thumb {
+                background: #198754;
+                border-radius: 4px;
+            }
+
+                .timeline-scroll-container::-webkit-scrollbar-thumb:hover {
+                    background: #146c43;
+                }
+
+        /* CSS CHO TIMELINE BLOCKCHAIN */
+        .blockchain-timeline {
+            border-left: 3px solid #198754;
+            padding-left: 20px;
+            margin-left: 10px;
+            margin-top: 10px;
         }
 
-        .table th {
-            background-color: #e9ecef;
+        .timeline-item {
+            margin-bottom: 25px;
+            position: relative;
         }
+
+            .timeline-item::before {
+                content: '';
+                position: absolute;
+                left: -29.5px;
+                top: 0;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background-color: #198754;
+                border: 3px solid #fff;
+                box-shadow: 0 0 0 2px #198754;
+            }
+
+        .timeline-date {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .timeline-content {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+            .timeline-content h6 {
+                margin-bottom: 5px;
+                color: #198754;
+                font-weight: bold;
+            }
     </style>
 </head>
 <body>
-    @* Ví dụ về cấu trúc layout cơ bản - Bạn nên dùng Layout chung *@
     <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
-        <div class="container-fluid">
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                    aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                <ul class="navbar-nav flex-grow-1">
-                    @* Thêm các mục menu khác *@
-                </ul>
-                <partial name="_LoginPartial" /> @* Hoặc phần hiển thị thông tin người dùng *@
-            </div>
+        <div class="container">
+            <a class="navbar-brand fw-bold text-success" href="#"><i class="fas fa-leaf"></i> Nông Sản Sạch</a>
         </div>
     </nav>
 
     <div class="container order-detail-container">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3>@ViewData["Title"]</h3>
+            <h3 class="fw-bold">@ViewData["Title"]</h3>
             <a asp-action="LichSuDonHang" asp-controller="KhachHang" asp-area="KhachHang" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left me-2"></i> Quay lại Lịch sử
             </a>
@@ -88,112 +160,115 @@
             <div class="row">
                 <div class="col-lg-7">
                     <div class="order-detail-card">
-                        <h5 class="card-title mb-3">Thông Tin Đơn Hàng</h5>
+                        <h5 class="card-title mb-3 border-bottom pb-2"><i class="fas fa-receipt me-2 text-primary"></i>Thông Tin Đơn Hàng</h5>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Mã Đơn Hàng:</div>
-                            <div class="col-sm-8 info-value">#@Model.M_DonHang</div>
+                            <div class="col-sm-5 info-label">Mã Đơn Hàng:</div>
+                            <div class="col-sm-7 info-value fw-bold">#@Model.M_DonHang</div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Ngày Đặt:</div>
-                            <div class="col-sm-8 info-value">@Model.NgayDat.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                            <div class="col-sm-5 info-label">Ngày Đặt:</div>
+                            <div class="col-sm-7 info-value">@Model.NgayDat.ToString("dd/MM/yyyy HH:mm")</div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Trạng Thái Đơn Hàng:</div>
-                            <div class="col-sm-8 info-value">
-                                @* Bạn cần có hàm GetOrderStatusBadgeClass trong Controller hoặc ở @functions trong View này *@
-                                <span class="badge @(ViewData["OrderStatusBadgeClass"] as string ?? "bg-secondary") status-badge">@Model.TrangThai</span>
+                            <div class="col-sm-5 info-label">Trạng Thái Đơn Hàng:</div>
+                            <div class="col-sm-7 info-value">
+                                @* GỌI HÀM LẤY MÀU CHO TRẠNG THÁI *@
+                                <span class="badge @GetStatusColor(Model.TrangThai)">@Model.TrangThai</span>
                             </div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Trạng Thái Thanh Toán:</div>
-                            <div class="col-sm-8 info-value">
-                                <span class="badge @(ViewData["PaymentStatusBadgeClass"] as string ?? "bg-light text-dark") status-badge">
+                            <div class="col-sm-5 info-label">Trạng Thái Thanh Toán:</div>
+                            <div class="col-sm-7 info-value">
+                                <span class="badge @(ViewData["PaymentStatusBadgeClass"] as string ?? "bg-light text-dark")">
                                     @(ViewData["PaymentStatusText"] as string ?? Model.TrangThaiThanhToan ?? "Chưa rõ")
                                 </span>
                             </div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Phương Thức Thanh Toán:</div>
-                            <div class="col-sm-8 info-value">@(Model.PhuongThucThanhToan?.TenPhuongThuc ?? "N/A")</div>
-                        </div>
-                        <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Tổng Tiền Thanh Toán:</div>
-                            <div class="col-sm-8 info-value fw-bold">@Model.TotalPrice.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) đ</div>
+                            <div class="col-sm-5 info-label">Tổng Tiền Thanh Toán:</div>
+                            <div class="col-sm-7 info-value fw-bold text-danger">@Model.TotalPrice.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) đ</div>
                         </div>
                     </div>
 
                     <div class="order-detail-card">
-                        <h5 class="card-title mb-3">Thông Tin Giao Hàng</h5>
+                        <h5 class="card-title mb-3 border-bottom pb-2"><i class="fas fa-truck me-2 text-info"></i>Thông Tin Giao Hàng</h5>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Người Nhận:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
+                            <div class="col-sm-5 info-label">Người Nhận:</div>
+                            <div class="col-sm-7 info-value">@(Model.KhachHang?.Ten_KhachHang ?? "N/A")</div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">SĐT Người Nhận:</div>
-                            <div class="col-sm-8 info-value">@(Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
+                            <div class="col-sm-5 info-label">SĐT Người Nhận:</div>
+                            <div class="col-sm-7 info-value">@(Model.KhachHang?.SDT_KhachHang ?? "N/A")</div>
                         </div>
                         <div class="row mb-2">
-                            <div class="col-sm-4 info-label">Địa Chỉ Giao Hàng:</div>
-                            <div class="col-sm-8 info-value">@Model.ShippingAddress</div>
+                            <div class="col-sm-5 info-label">Địa Chỉ Giao Hàng:</div>
+                            <div class="col-sm-7 info-value">@Model.ShippingAddress</div>
                         </div>
-                        @if (!string.IsNullOrEmpty(Model.Notes))
-                        {
-                            <div class="row mb-2">
-                                <div class="col-sm-4 info-label">Ghi Chú Đơn Hàng:</div>
-                                <div class="col-sm-8 info-value">@Model.Notes</div>
-                            </div>
-                        }
-                        @if (Model.VanChuyen != null && !string.IsNullOrEmpty(Model.M_VanDon))
-                        {
-                            <div class="row mb-2">
-                                <div class="col-sm-4 info-label">ĐV Vận Chuyển:</div>
-                                <div class="col-sm-8 info-value">@Model.VanChuyen.DonViVanChuyen</div>
-                            </div>
-                            <div class="row mb-2">
-                                <div class="col-sm-4 info-label">Mã Vận Đơn:</div>
-                                <div class="col-sm-8 info-value">@Model.M_VanDon</div>
-                            </div>
-                        }
                     </div>
                 </div>
+
                 <div class="col-lg-5">
-                    <div class="order-detail-card">
-                        <h5 class="card-title mb-3">Danh Sách Sản Phẩm</h5>
-                        @if (Model.ChiTietDatHangs != null && Model.ChiTietDatHangs.Any())
+                    <div class="order-detail-card" style="border: 2px solid #198754;">
+                        <h5 class="card-title mb-3 text-success fw-bold"><i class="fas fa-link me-2"></i>Truy Xuất Nguồn Gốc</h5>
+
+                        @if (lichSuBlockchain != null && lichSuBlockchain.Any())
                         {
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Sản phẩm</th>
-                                        <th class="text-center">SL</th>
-                                        <th class="text-end">Đơn giá</th>
-                                        <th class="text-end">Thành tiền</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var item in Model.ChiTietDatHangs)
+                            <div class="timeline-scroll-container">
+                                <div class="blockchain-timeline">
+                                    @foreach (var item in lichSuBlockchain)
                                     {
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    @if (!string.IsNullOrEmpty(item.SanPham?.AnhSanPham))
-                                                    {
-                                                        <img src="~/@item.SanPham.AnhSanPham" alt="@item.SanPham.TenSanPham" class="product-img-sm" />
-                                                    }
-                                                    <span>@(item.SanPham?.TenSanPham ?? "N/A")</span>
-                                                </div>
-                                            </td>
-                                            <td class="text-center">@item.Quantity</td> @* Sử dụng item.Quantity từ model ChiTietDatHang *@
-                                            <td class="text-end">@item.GiaDatHang.ToString("N0") đ</td> @* Sử dụng item.GiaDatHang *@
-                                            <td class="text-end">@item.TongTien.ToString("N0") đ</td> @* Sử dụng item.TongTien *@
-                                        </tr>
+                                        DateTime dt = DateTimeOffset.FromUnixTimeSeconds((long)item.Timestamp).ToLocalTime().DateTime;
+
+                                        <div class="timeline-item">
+                                            <div class="timeline-date"><i class="far fa-clock me-1"></i>@dt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                                            <div class="timeline-content">
+                                                <h6>@item.Action</h6>
+                                                <div class="small text-muted mb-1"><i class="fas fa-user-circle me-1"></i><strong>Thực hiện bởi:</strong> @item.Actor</div>
+                                                <div class="small text-muted mb-2"><i class="fas fa-map-marker-alt me-1"></i><strong>Vị trí:</strong> @item.Location</div>
+                                                <p class="mb-0 bg-white p-2 border rounded small">@item.Details</p>
+                                            </div>
+                                        </div>
                                     }
-                                </tbody>
-                            </table>
+                                </div>
+                            </div>
                         }
                         else
                         {
-                            <p>Không có sản phẩm trong đơn hàng này.</p>
+                            <div class="alert alert-success bg-opacity-10 border-success text-success">
+                                <i class="fas fa-shield-alt me-2"></i>Đơn hàng đang chờ xử lý để ghi lên Blockchain.
+                            </div>
+                        }
+                    </div>
+
+                    <div class="order-detail-card">
+                        <h5 class="card-title mb-3 border-bottom pb-2"><i class="fas fa-box-open me-2 text-warning"></i>Sản Phẩm (@(Model.ChiTietDatHangs?.Count ?? 0))</h5>
+                        @if (Model.ChiTietDatHangs != null && Model.ChiTietDatHangs.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Sản phẩm</th>
+                                            <th class="text-center">SL</th>
+                                            <th class="text-end">T.Tiền</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in Model.ChiTietDatHangs)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="fw-medium text-truncate" style="max-width: 150px;">@(item.SanPham?.TenSanPham ?? "N/A")</span>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">@item.Khoiluong</td>
+                                                <td class="text-end fw-bold">@item.TongTien.ToString("N0") đ</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
                     </div>
                 </div>

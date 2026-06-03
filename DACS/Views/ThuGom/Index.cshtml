@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="~/css/AIGoiY.css?v=@DateTime.Now.Ticks">
-    
+
 </head>
 <body>
     <div class="container mt-4 mb-5">
@@ -33,7 +33,6 @@
                             <i class="fas fa-user me-2"></i> NGƯỜI CUNG CẤP
                         </div>
                         <div class="card-body">
-                            @* (Các trường: Tên, SĐT, Tỉnh, Huyện, Xã, Đường, Thời gian, Ghi chú... giữ nguyên) *@
                             <div class="mb-3">
                                 <label asp-for="SupplierName" class="form-label"></label> <span class="text-danger">*</span>
                                 <input asp-for="SupplierName" class="form-control" placeholder="Nhập tên người liên hệ">
@@ -140,19 +139,35 @@
                                 </div>
                             </div>
                             <div class="mb-3 bg-light p-3 rounded border">
-                                <label for="MoistureInput" class="form-label fw-bold">
-                                    <i class="fas fa-tint text-primary"></i> Độ ẩm của hàng:
-                                    <span id="MoistureDisplay" class="fs-5 text-primary">15%</span>
+                                <label class="form-label fw-bold mb-3">
+                                    <i class="fas fa-tint text-primary"></i> Tình trạng phụ phẩm (Đánh giá cảm quan):
                                 </label>
 
-                                <input type="range" class="form-range"
-                                       id="MoistureInput"
-                                       name="MoisturePercentage"
-                                       min="5" max="40" step="0.5" value="15">
-
-                                <div id="MoistureStatus" class="mt-2 small fst-italic fw-bold text-success">
-                                    <i class="fas fa-check"></i> Hàng khô ráo, đạt chuẩn
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <input type="radio" class="btn-check moisture-option" name="MoistureState" id="moistureDry" value="10" autocomplete="off">
+                                        <label class="btn btn-outline-warning w-100 text-start p-2" for="moistureDry">
+                                            <strong><i class="fas fa-fire"></i> Khô hoàn toàn</strong><br>
+                                            <small>Khô giòn, bóp nát dễ dàng, màu nhạt (Độ ẩm ước tính < 15%)</small>
+                                        </label>
+                                    </div>
+                                    <div class="col-12">
+                                        <input type="radio" class="btn-check moisture-option" name="MoistureState" id="moistureDamp" value="20" autocomplete="off" checked>
+                                        <label class="btn btn-outline-success w-100 text-start p-2" for="moistureDamp">
+                                            <strong><i class="fas fa-cloud"></i> Hơi ẩm / Vừa phải</strong><br>
+                                            <small>Mềm, sờ mát tay, không vón cục (Độ ẩm ước tính 15% - 30%)</small>
+                                        </label>
+                                    </div>
+                                    <div class="col-12">
+                                        <input type="radio" class="btn-check moisture-option" name="MoistureState" id="moistureWet" value="50" autocomplete="off">
+                                        <label class="btn btn-outline-danger w-100 text-start p-2" for="moistureWet">
+                                            <strong><i class="fas fa-water"></i> Tươi / Ướt</strong><br>
+                                            <small>Mới thu hoạch, vắt ra nước, màu sẫm (Độ ẩm ước tính > 50%)</small>
+                                        </label>
+                                    </div>
                                 </div>
+
+                                <input type="hidden" id="MoistureInput" name="MoisturePercentage" value="20">
                             </div>
                             <div class="mb-3">
                                 <label asp-for="ByproductValue" class="form-label"></label>
@@ -205,7 +220,8 @@
                             <input type="hidden" id="hdnPhiVanChuyen" name="PhiVanChuyen" value="0" />
                             <input type="hidden" id="hdnDonGiaThuMua" name="DonGiaThuMua" value="0" />
                             <div class="d-flex justify-content-center flex-wrap gap-3 mt-3">
-                                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane me-2"></i> Yêu cầu Thu gom</button>
+                                @* THÊM ID CHO NÚT SUBMIT ĐỂ JS BẮT SỰ KIỆN *@
+                                <button type="submit" id="btnSubmitThuGom" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane me-2"></i> Yêu cầu Thu gom</button>
                                 <button type="reset" class="btn btn-outline-danger"><i class="fas fa-redo me-2"></i> Làm mới Form</button>
                             </div>
                         </div>
@@ -247,7 +263,6 @@
             </div>
         </form>
     </div>
-    <!-- AI Assistant Bubble -->
     <div id="ai-assistant" class="ai-assistant">
         <div class="ai-message" id="aiMessage">
             Chào bạn! Nhập đủ thông tin để tôi giúp bạn định giá nhé.
@@ -266,55 +281,55 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
     @await Html.PartialAsync("_ValidationScriptsPartial") @* Script validation *@
+
+    @* --- SCRIPT MỚI: CHỐNG SPAM CLICK --- *@
     <script>
-        // --- ĐOẠN CODE XỬ LÝ THANH TRƯỢT ĐỘ ẨM ---
-        const slider = document.getElementById("MoistureInput");
-        const display = document.getElementById("MoistureDisplay");
-        const status = document.getElementById("MoistureStatus");
+        $(document).ready(function () {
+            // Can thiệp vào sự kiện Submit của Form
+            $('#mainThuGomForm').on('submit', function (e) {
+                var $form = $(this);
+                var $btn = $('#btnSubmitThuGom');
 
-        // Hàm cập nhật giao diện khi kéo
-        function updateMoistureUI() {
-            const val = parseFloat(slider.value);
-            display.innerText = val + "%";
+                // Kiểm tra xem Form có hợp lệ không (đã điền đủ các trường bắt buộc chưa)
+                if ($form.valid()) {
+                    // Nếu nút đã bị khóa trước đó, ngăn chặn hành động
+                    if ($btn.hasClass('disabled-spin')) {
+                        e.preventDefault();
+                        return false;
+                    }
 
-            // Logic hiển thị trạng thái cho nông dân dễ hiểu
-            if (val <= 12) {
-                status.className = "mt-2 small fst-italic fw-bold text-warning";
-                status.innerHTML = '<i class="fas fa-fire"></i> Rất khô ';
-            }
-            else if (val > 12 && val <= 16) {
-                status.className = "mt-2 small fst-italic fw-bold text-success";
-                status.innerHTML = '<i class="fas fa-check-circle"></i> Đạt chuẩn, phơi nắng tốt ';
-            }
-            else if (val > 16 && val <= 22) {
-                status.className = "mt-2 small fst-italic fw-bold text-primary";
-                status.innerHTML = '<i class="fas fa-cloud"></i> Hơi ẩm, mới gặt ';
-            }
-            else {
-                status.className = "mt-2 small fst-italic fw-bold text-danger";
-                status.innerHTML = '<i class="fas fa-water"></i> Ướt, dính mưa ';
-            }
-
-            // Gọi lại hàm kiểm tra điều kiện để mở khóa nút AI nếu cần
-            if (typeof checkConditions === "function") {
-                checkConditions();
-            }
-        }
-
-        // Lắng nghe sự kiện khi nông dân kéo thanh trượt
-        slider.addEventListener("input", updateMoistureUI);
-
-        // Chạy 1 lần lúc mới vào trang để hiển thị mặc định
-        updateMoistureUI();
-        // ------------------------------------------
+                    // Khóa nút bấm và đổi hiệu ứng UI
+                    $btn.addClass('disabled-spin'); // Đánh dấu là đang submit
+                    $btn.prop('disabled', true); // Vô hiệu hóa nút
+                    $btn.html('<i class="fas fa-spinner fa-spin me-2"></i> Đang xử lý, vui lòng đợi...');
+                    // Form vẫn sẽ tiếp tục submit ngầm 1 lần duy nhất lên Controller
+                }
+            });
+        });
     </script>
+    @* ------------------------------------- *@
+
+    <script>
+        // --- ĐOẠN CODE XỬ LÝ ĐỘ ẨM (GIẢI PHÁP 1: ĐÁNH GIÁ CẢM QUAN) ---
+        const moistureHiddenInput = document.getElementById("MoistureInput");
+        const moistureOptions = document.querySelectorAll(".moisture-option");
+
+        moistureOptions.forEach(option => {
+            option.addEventListener("change", function() {
+                moistureHiddenInput.value = this.value;
+                if (typeof checkConditions === "function") {
+                    checkConditions();
+                }
+            });
+        });
+    </script>
+
     @* AI gọi ý *@
     <script>
         const aiCircle = document.getElementById("aiCircle");
         const aiMessage = document.getElementById("aiMessage");
         const aiIcon = aiCircle.querySelector("i");
 
-        // Hàm lấy Text hiển thị của Dropdown (Dùng cho Địa chỉ)
         function getSelectedText(elementId) {
             const el = document.getElementById(elementId);
             if (el && el.selectedIndex !== -1) {
@@ -326,132 +341,148 @@
         async function calculatePrice() {
             // 1. Chuyển sang trạng thái LOADING
             aiCircle.className = "ai-circle loading";
-            aiIcon.className = "fas fa-sync-alt"; // Icon xoay
+            aiIcon.className = "fas fa-sync-alt";
             aiMessage.innerText = "Đang kết nối vệ tinh phân tích dữ liệu...";
 
-            // 2. Thu thập dữ liệu (Map đúng tên biến với C# PriceRequest)
+            // Lấy tọa độ và chống lỗi số phẩy (vd: 10,76 -> 10.76)
+            let rawLat = document.getElementById("PickupLat").value || "0";
+            let rawLng = document.getElementById("PickupLng").value || "0";
+            let parsedLat = parseFloat(rawLat.toString().replace(',', '.'));
+            let parsedLng = parseFloat(rawLng.toString().replace(',', '.'));
+
+            // 2. Thu thập dữ liệu
             const req = {
-                // ĐỊA CHỈ: Lấy TÊN (Text) để API bản đồ tìm được tọa độ
                 Province: getSelectedText("provinceSelectThuGom"),
                 District: getSelectedText("districtSelectThuGom"),
                 Ward: getSelectedText("wardSelectThuGom"),
                 Street: document.getElementById("SupplierStreet").value,
-
-                // SẢN PHẨM: Lấy MÃ (Value) để tra cứu trong DB (Quan trọng!)
                 nhomsanpham: document.getElementById("sanPhamSelect").value,
-
-                // CÁC THÔNG SỐ KHÁC
                 KhoiLuong: parseFloat(document.getElementById("KhoiLuong").value || 0),
                 DoAmThucTe: parseFloat(document.getElementById("MoistureInput").value || 0),
                 IsWet: document.getElementById("CharWet").checked,
-                IsBulky: document.getElementById("CharBulky").checked
+                IsBulky: document.getElementById("CharBulky").checked,
+                Lat: parsedLat,
+                Lng: parsedLng
             };
 
-                   try {
-            // Gọi API
-            const res = await fetch("du-doan-gia", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(req)
-            });
+            try {
+                // Gọi API
+                const res = await fetch("du-doan-gia", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(req)
+                });
 
-            // --- SỬA ĐOẠN NÀY ĐỂ BẮT LỖI SERVER ---
-            if (!res.ok) {
-                // Nếu Server trả về lỗi (400, 500), đọc nội dung lỗi đó ra
-                const errorText = await res.text();
-                throw new Error(errorText); // Ném lỗi này xuống phần catch
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(errorText);
+                }
+
+                const data = await res.json();
+                console.log("Dữ liệu nhận được từ Backend:", data);
+
+                const heSoMuaVu = data.heSoMuaVu !== undefined ? data.heSoMuaVu : data.HeSoMuaVu;
+                const heSoDoAm = data.heSoDoAm !== undefined ? data.heSoDoAm : data.HeSoDoAm;
+                const tenSP = data.tenSanPham || data.TenSanPham;
+                const khoGan = data.khoGanNhat || data.KhoGanNhat;
+                const quangDuong = data.quangDuong || data.QuangDuong;
+                const phiShip = data.phiVanChuyen || data.PhiVanChuyen;
+                const tongTien = data.totalPrice || data.TotalPrice;
+
+                // MỚI: Lấy dữ liệu cảnh báo thời tiết
+                const weatherWarning = data.weatherWarning || data.WeatherWarning || "";
+
+                // 3. Có kết quả -> Trở về trạng thái ACTIVE
+                aiCircle.className = "ai-circle ai-glow";
+                aiIcon.className = "fas fa-check-circle";
+
+                const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+
+                let muaVuText = "";
+                if (heSoMuaVu > 1)
+                    muaVuText = `<span class="text-success fw-bold">Trái mùa (Tăng giá <i class="fas fa-arrow-up"></i>)</span>`;
+                else if (heSoMuaVu < 1)
+                    muaVuText = `<span class="text-warning fw-bold">Chính vụ (Giảm nhẹ <i class="fas fa-arrow-down"></i>)</span>`;
+                else
+                    muaVuText = `<span class="text-secondary">Bình ổn</span>`;
+
+                let doAmText = "";
+                if (heSoDoAm < 1)
+                    doAmText = `<span class="text-danger">Ẩm cao (Trừ ${(100 - heSoDoAm * 100).toFixed(1)}%)</span>`;
+                else if (heSoDoAm > 1)
+                    doAmText = `<span class="text-success">Khô tốt (Thưởng ${(heSoDoAm * 100 - 100).toFixed(1)}%)</span>`;
+                else
+                    doAmText = `Đạt chuẩn (15%)`;
+
+                // MỚI: Render Cảnh báo Thời tiết (Có Fallback UI)
+                let weatherHtml = "";
+                if (weatherWarning && weatherWarning.trim() !== "") {
+                    // Nếu có thời tiết từ Backend -> Hiển thị khung Xanh/Vàng
+                    weatherHtml = `
+                        <div class="mt-2 p-2 rounded" style="background-color: #e0f7fa; border-left: 4px solid #00acc1; font-size: 0.8rem; color: #006064; margin-bottom: 8px;">
+                            <strong><i class="fas fa-cloud-sun-rain"></i> Tư vấn thời tiết & Bảo quản:</strong><br>
+                            ${weatherWarning}
+                        </div>
+                    `;
+                } else {
+                    // Nếu Backend không trả về (hoặc lỗi API) -> Vẫn hiện khung Xám để biết UI đã hoạt động
+                    weatherHtml = `
+                        <div class="mt-2 p-2 rounded" style="background-color: #f8f9fa; border-left: 4px solid #6c757d; font-size: 0.8rem; color: #495057; margin-bottom: 8px;">
+                            <strong><i class="fas fa-info-circle"></i> Trạng thái lô hàng:</strong><br>
+                            Hệ thống đã xác nhận độ ẩm. Hãy bảo quản lô hàng đúng tiêu chuẩn nhé!
+                        </div>
+                    `;
+                }
+
+                // Render HTML
+                aiMessage.innerHTML = `
+                    <div style="text-align: left; min-width: 250px; font-size: 0.9rem;">
+                        <div class="border-bottom pb-2 mb-2 fw-bold text-primary">
+                            <i class="fas fa-robot"></i> AI Định Giá Chi Tiết
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Sản phẩm:</span>
+                            <span class="fw-bold">${tenSP || 'Unknown'}</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="fas fa-cloud-sun"></i> Mùa vụ:</span>
+                            <small>${muaVuText}</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="fas fa-tint"></i> Độ ẩm:</span>
+                            <small>${doAmText}</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-2 text-muted">
+                            <span><i class="fas fa-truck"></i> Ship (${quangDuong}km):</span>
+                            <span>- ${fmt.format(phiShip)}</span>
+                        </div>
+
+                        ${weatherHtml}
+
+                        <div class="mt-2 pt-2 border-top border-secondary text-center bg-light rounded py-2">
+                            <span class="text-muted small">Giá thu mua ước tính:</span><br>
+                            <span class="text-success fw-bold fs-5">${fmt.format(tongTien)}</span>
+                        </div>
+
+                        <div class="text-center mt-1">
+                            <small class="text-muted" style="font-size: 0.75rem">Kho: ${khoGan}</small>
+                        </div>
+                    </div>
+                `;
+
+            } catch (err) {
+                console.error(err);
+                aiCircle.className = "ai-circle idle";
+                aiIcon.className = "fas fa-exclamation-triangle";
+                aiMessage.innerText = "Lỗi: " + err.message;
             }
-
-            const data = await res.json();
-            console.log("Dữ liệu nhận được:", data); // Bật F12 xem cái này
-
-            // --- KIỂM TRA TÊN BIẾN (Case Sensitive) ---
-            // ASP.NET Core thường tự động đổi tên biến thành chữ thường (camelCase)
-            // Ví dụ: C# gửi "TenSanPham" -> JS nhận "tenSanPham"
-            // Nếu data.heSoMuaVu bị undefined, hãy thử đổi thành data.HeSoMuaVu
-            const heSoMuaVu = data.heSoMuaVu !== undefined ? data.heSoMuaVu : data.HeSoMuaVu;
-            const heSoDoAm = data.heSoDoAm !== undefined ? data.heSoDoAm : data.HeSoDoAm;
-            const tenSP = data.tenSanPham || data.TenSanPham;
-            const khoGan = data.khoGanNhat || data.KhoGanNhat;
-            const quangDuong = data.quangDuong || data.QuangDuong;
-            const phiShip = data.phiVanChuyen || data.PhiVanChuyen;
-            const tongTien = data.totalPrice || data.TotalPrice;
-
-            // 3. Có kết quả -> Trở về trạng thái ACTIVE
-            aiCircle.className = "ai-circle ai-glow";
-            aiIcon.className = "fas fa-check-circle";
-
-            const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
-
-            // Logic hiển thị Mùa vụ
-            let muaVuText = "";
-            if (heSoMuaVu > 1)
-                muaVuText = `<span class="text-success fw-bold">Trái mùa (Tăng giá <i class="fas fa-arrow-up"></i>)</span>`;
-            else if (heSoMuaVu < 1)
-                muaVuText = `<span class="text-warning fw-bold">Chính vụ (Giảm nhẹ <i class="fas fa-arrow-down"></i>)</span>`;
-            else
-                muaVuText = `<span class="text-secondary">Bình ổn</span>`;
-
-            // Logic hiển thị Độ ẩm
-            let doAmText = "";
-            if (heSoDoAm < 1)
-                doAmText = `<span class="text-danger">Ẩm cao (Trừ ${(100 - heSoDoAm * 100).toFixed(1)}%)</span>`;
-            else if (heSoDoAm > 1)
-                doAmText = `<span class="text-success">Khô tốt (Thưởng ${(heSoDoAm * 100 - 100).toFixed(1)}%)</span>`;
-            else
-                doAmText = `Đạt chuẩn (15%)`;
-
-            // Render HTML
-            aiMessage.innerHTML = `
-                <div style="text-align: left; min-width: 250px; font-size: 0.9rem;">
-                    <div class="border-bottom pb-2 mb-2 fw-bold text-primary">
-                        <i class="fas fa-robot"></i> AI Định Giá Chi Tiết
-                    </div>
-
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>Sản phẩm:</span>
-                        <span class="fw-bold">${tenSP || 'Unknown'}</span>
-                    </div>
-
-                    <div class="d-flex justify-content-between mb-1">
-                        <span><i class="fas fa-cloud-sun"></i> Mùa vụ:</span>
-                        <small>${muaVuText}</small>
-                    </div>
-
-                    <div class="d-flex justify-content-between mb-1">
-                        <span><i class="fas fa-tint"></i> Độ ẩm:</span>
-                        <small>${doAmText}</small>
-                    </div>
-
-                    <div class="d-flex justify-content-between mb-1 text-muted">
-                        <span><i class="fas fa-truck"></i> Ship (${quangDuong}km):</span>
-                        <span>- ${fmt.format(phiShip)}</span>
-                    </div>
-
-                    <div class="mt-2 pt-2 border-top border-secondary text-center bg-light rounded py-2">
-                        <span class="text-muted small">Giá thu mua ước tính:</span><br>
-                        <span class="text-success fw-bold fs-5">${fmt.format(tongTien)}</span>
-                    </div>
-
-                    <div class="text-center mt-1">
-                        <small class="text-muted" style="font-size: 0.75rem">Kho: ${khoGan}</small>
-                    </div>
-                </div>
-            `;
-
-        } catch (err) {
-            console.error(err);
-            aiCircle.className = "ai-circle idle";
-            aiIcon.className = "fas fa-exclamation-triangle";
-
-            // --- HIỂN THỊ LỖI THỰC SỰ RA MÀN HÌNH ---
-            // Dòng này giúp bạn biết chính xác lỗi gì
-            aiMessage.innerText = "Lỗi: " + err.message;
-        }
         }
 
         function checkConditions() {
-            // Lấy giá trị các trường
             const loai = document.getElementById("loaiSanPhamSelect")?.value;
             const sanpham = document.getElementById("sanPhamSelect")?.value;
             const khoiLuong = document.getElementById("KhoiLuong")?.value;
@@ -461,7 +492,6 @@
             const street = document.getElementById("SupplierStreet")?.value;
             const moisture = document.getElementById("MoistureInput")?.value;
 
-            // Kiểm tra xem đã nhập đủ chưa
             const isValid = loai && sanpham && khoiLuong && province && district && ward && street && moisture;
 
             if (!isValid) {
@@ -471,19 +501,16 @@
                 return false;
             }
 
-            // Nếu đủ điều kiện
             aiCircle.className = "ai-circle ai-glow";
             aiIcon.className = "fas fa-hand-holding-dollar";
             aiMessage.innerText = "Dữ liệu đã đủ! Bấm vào tôi để định giá.";
             return true;
         }
 
-        // Gán sự kiện change cho tất cả input/select
         document.querySelectorAll("input, select").forEach(el => {
             el.addEventListener("change", checkConditions);
         });
 
-        // Sự kiện click vào AI
         aiCircle.addEventListener("click", () => {
             if (checkConditions()) {
                 calculatePrice();
@@ -646,7 +673,6 @@
                  dropdown.prop('disabled', false);
             }
 
-            // Khởi tạo (Nếu là postback lỗi, không reset)
             if (districtSelect.find('option').length <= 1) {
                  resetDropdown(districtSelect, '-- Chọn Quận/Huyện --', true);
             }
@@ -654,14 +680,12 @@
                 resetDropdown(wardSelect, '-- Chọn Xã/Phường --', true);
             }
 
-            // Sự kiện change Tỉnh/TP
             provinceSelect.on('change', function () {
                 const selectedProvinceId = $(this).val();
                 resetDropdown(districtSelect, '-- Đang tải Quận/Huyện... --', true);
                 resetDropdown(wardSelect, '-- Chọn Xã/Phường --', true);
 
                 if (selectedProvinceId) {
-                    // ================= SỬA LỖI 3: Đổi Controller và Action cho AJAX =================
                     const url = '@Url.Action("GetDistricts", "ThuGom")' + '?provinceId=' + selectedProvinceId;
                     $.getJSON(url)
                         .done(function (districts) {
@@ -687,13 +711,11 @@
                 }
             });
 
-            // Sự kiện change Quận/Huyện
             districtSelect.on('change', function () {
                 const selectedDistrictId = $(this).val();
                 resetDropdown(wardSelect, '-- Đang tải Xã/Phường... --', true);
 
                 if (selectedDistrictId) {
-                     // ================= SỬA LỖI 3: Đổi Controller và Action cho AJAX =================
                      const url = '@Url.Action("GetWards", "ThuGom")' + '?districtId=' + selectedDistrictId;
                      $.getJSON(url)
                          .done(function (wards) {
@@ -751,32 +773,27 @@
                 }, 700);
             });
 
-            // === LOGIC MỚI CHO SẢN PHẨM ===
             const loaiSanPhamSelect = $('#loaiSanPhamSelect');
             const sanPhamSelect = $('#sanPhamSelect');
 
-            // Hàm reset dropdown sản phẩm
             function resetSanPhamDropdown(text, disabled) {
                 sanPhamSelect.empty().append($('<option>', {
                     value: '',
                     text: text
                 })).prop('disabled', disabled);
-                sanPhamSelect.val(''); // Đảm bảo giá trị rỗng
+                sanPhamSelect.val('');
             }
 
-            // Khởi tạo (Nếu là postback lỗi, không reset)
             if (sanPhamSelect.find('option').length <= 1) {
                  resetSanPhamDropdown('-- Vui lòng chọn Loại Sản Phẩm trước --', true);
             }
 
-            // Sự kiện change Loại Sản Phẩm
             loaiSanPhamSelect.on('change', function () {
                 const selectedLoaiSPId = $(this).val();
 
                 if (selectedLoaiSPId) {
                     resetSanPhamDropdown('-- Đang tải Sản Phẩm... --', true);
 
-                    // Gọi hàm AJAX "GetSanPhamsByLoai" trong ThuGomController
                     const url = '@Url.Action("GetSanPhamsByLoai", "ThuGom")' + '?maLoaiSP=' + selectedLoaiSPId;
 
                     $.getJSON(url)
@@ -797,7 +814,6 @@
                     resetSanPhamDropdown('-- Vui lòng chọn Loại Sản Phẩm trước --', true);
                 }
             });
-            // === KẾT THÚC LOGIC MỚI ===
 
             initPickupMap();
 
@@ -815,6 +831,5 @@
 
         });
     </script>
-   
 </body>
 </html>
