@@ -16,7 +16,7 @@ Saikahana-web là một website thương mại điện tử dành cho thu gom v�
 
 **Xem video giới thiệu đầy đủ về các tính năng chính của Saikahana Web:**
 
-[![Saikahana Web Demo](https://img.youtube.com/vi/brVFc_q7lI0/0.jpg)](https://www.youtube.com/watch?v=brVFc_q7lI0)
+[![Saikahana Web Demo](https://img.youtube.com/vi/pFfYh3sAgCE/0.jpg)](https://youtu.be/pFfYh3sAgCE)
 
 - 🛒 Mua / Bán sản phẩm phụ phẩm nông nghiệp
 - 🤖 Tư vấn AI với RAG (Retrieval-Augmented Generation)
@@ -168,7 +168,7 @@ dotnet run
   - Khởi chạy BlockchainService.TestBlockchainAsync() (non-blocking) nếu cấu hình blockchain hợp lệ.
 
 9) Kết nối mobile / API
-- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví d:[...]
+- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví d:[[...]
 
 ---
 
