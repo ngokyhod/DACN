@@ -12,6 +12,17 @@ Saikahana-web là một website thương mại điện tử dành cho thu gom v�
 
 ---
 
+## 📹 [Demo & Screenshots](./DEMO.md)
+
+**Xem video giới thiệu đầy đủ về các tính năng chính của Saikahana Web:**
+- 🛒 Mua / Bán sản phẩm phụ phẩm nông nghiệp
+- 🤖 Tư vấn AI với RAG (Retrieval-Augmented Generation)
+- 💬 Chat real-time với SignalR
+- 📸 Nhận diện ảnh sản phẩm bằng CLIP
+- 📱 API cho ứng dụng mobile
+
+---
+
 ## Stack chính
 - Language(s): C# (ASP.NET MVC) + Python (FastAPI AI engine) + SQL Server
 - Framework / runtime:
@@ -44,7 +55,7 @@ SQLQueryprovip.sql         # Script SQL / query hỗ trợ
 
 How it fits together:
 - ASP.NET app (DACS) là frontend + backend chính, phục vụ web và API cho mobile; khởi động đồng thời một SocketServer/SignalR cho chat thời gian thực.
-- AI engine (Python) chạy độc lập (FastAPI) trên cổng mặc định 5000; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG và có thêm CLIP để so khớp ảnh với ảnh mẫu ReferenceImages.
+- AI engine (Python) chạy độc lập (FastAPI) trên cổng mặc định 5000; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG [...]
 - Dữ liệu động (giá, tồn kho, lịch sử chat AI) được lấy trực tiếp từ SQL Server bằng SQLAlchemy trong Python (DB_CONNECTION_STRING) và bằng EF Core trong C#.
 
 ---
@@ -112,7 +123,7 @@ source .venv/bin/activate
 # .venv\Scripts\activate
 
 pip install --upgrade pip
-pip install uvicorn fastapi pydantic numpy torch pillow langchain_huggingface langchain_community langchain_ollama sentence-transformers faiss-cpu rank_bm25 cross-encoder sqlalchemy google-auth firebase-admin
+pip install uvicorn fastapi pydantic numpy torch pillow langchain_huggingface langchain_community langchain_ollama sentence-transformers faiss-cpu rank_bm25 cross-encoder sqlalchemy google-auth f[...]
 # (Tên package có thể khác; tùy hệ thống GPU vs CPU chọn faiss-gpu hoặc faiss-cpu)
 ```
 
@@ -154,7 +165,7 @@ dotnet run
   - Khởi chạy BlockchainService.TestBlockchainAsync() (non-blocking) nếu cấu hình blockchain hợp lệ.
 
 9) Kết nối mobile / API
-- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví dụ http://localhost:5001) + path API.
+- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví d:[...]
 
 ---
 
@@ -220,15 +231,5 @@ dotnet run
 
 ---
 
-## Gợi ý câu hỏi tiếp theo (để tôi giúp bạn sửa đổi README hoặc cấu hình)
-- "Hướng dẫn chi tiết cách tạo faiss_db_local từ PDF trong KnowledgeBase bằng indexer_local.py."
-- "Cấu hình example `appsettings.json` với mẫu ConnectionStrings và EmailSettings (không chứa mật khẩu)."
-- "Hướng dẫn chuyển ChatOllama sang OpenAI hoặc một LLM khác (ví dụ gpt-4o hoặc local llama.cpp)."
-
----
-
 ## Kết luận
-README này tóm tắt chi tiết những gì quan trọng để khởi chạy và vận hành Saikahana Web: chú ý quan trọng nhất là cấu hình DB và AI (faiss + CLIP + LLM + firebase). Nếu bạn muốn, tôi có thể:
-- Tạo file README.md thật trong repo (nếu muốn tôi sẽ commit),
-- Viết script Dockerfile/docker-compose cho cả webapp + AI server,
-- Hoặc tạo bản `appsettings.json.example` với các key mẫu để bạn điền.
+README này tóm tắt chi tiết những gì quan trọng để khởi chạy và vận hành Saikahana Web.
