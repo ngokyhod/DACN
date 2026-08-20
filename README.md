@@ -12,9 +12,12 @@ Saikahana-web là một website thương mại điện tử dành cho thu gom v�
 
 ---
 
-## 📹 [Demo & Screenshots](./DEMO.md)
+## 📹 Demo & Screenshots
 
 **Xem video giới thiệu đầy đủ về các tính năng chính của Saikahana Web:**
+
+[![Saikahana Web Demo](https://img.youtube.com/vi/brVFc_q7lI0/0.jpg)](https://www.youtube.com/watch?v=brVFc_q7lI0)
+
 - 🛒 Mua / Bán sản phẩm phụ phẩm nông nghiệp
 - 🤖 Tư vấn AI với RAG (Retrieval-Augmented Generation)
 - 💬 Chat real-time với SignalR
