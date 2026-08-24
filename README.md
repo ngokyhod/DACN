@@ -44,7 +44,6 @@ DACS/                       # ASP.NET MVC project (server chính)
   Models/                   # Entity models + ApplicationDbContext.cs
   Services/                 # Service layer: EmailService, ESmsService, BlockchainService, AIMatchingService, SocketServer...
     AI_Engine/              # AI components (FastAPI servers, indexer, CLIP, faiss DB, reference images, knowledgebase)
-      ai_server_local.py    # FastAPI RAG + CLIP + SQL integration (port 5000)
       agent_server_local.py # Local agent server
       KnowledgeBase/        # PDF & ReferenceImages (được serve tĩnh tại /pdfs)
   Views/                    # Razor views
@@ -58,7 +57,7 @@ SQLQueryprovip.sql         # Script SQL / query hỗ trợ
 
 How it fits together:
 - ASP.NET app (DACS) là frontend + backend chính, phục vụ web và API cho mobile; khởi động đồng thời một SocketServer/SignalR cho chat thời gian thực.
-- AI engine (Python) chạy độc lập (FastAPI) trên cổng mặc định 5000; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG [...]
+- AI engine (Python) chạy độc lập (FastAPI) trên cổng mặc định 5001; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG [...]
 - Dữ liệu động (giá, tồn kho, lịch sử chat AI) được lấy trực tiếp từ SQL Server bằng SQLAlchemy trong Python (DB_CONNECTION_STRING) và bằng EF Core trong C#.
 
 ---
@@ -82,7 +81,7 @@ How it fits together:
 - SQL Server (local hoặc remote) với database tương thích schema của dự án
 - Python 3.10+ (khuyến nghị) với pip
 - Nếu muốn dùng CLIP + acceleration: GPU + CUDA (nếu không có, chạy trên CPU nhưng chậm)
-- OLLAMA hoặc local LLM endpoint nếu muốn (ai_server_local.py dùng ChatOllama(model="llama3") — cần điều chỉnh tùy môi trường LLM)
+- OLLAMA hoặc local LLM endpoint nếu muốn (agent_server_local.py dùng ChatOllama(model="llama3") — cần điều chỉnh tùy môi trường LLM)
 - FAISS: cài faiss-cpu hoặc faiss-gpu tùy cấu hình
 
 ---
@@ -141,18 +140,16 @@ pip install uvicorn fastapi pydantic numpy torch pillow langchain_huggingface la
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/DACS/firebase_config.json"
 export DB_CONNECTION_STRING="mssql+pyodbc://<SERVER>/<DB>?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes&TrustServerCertificate=yes"
-# (Bạn có thể chỉnh trực tiếp biến trong ai_server_local.py hoặc dùng conf file)
+# (Bạn có thể chỉnh trực tiếp biến trong agent_server_local.py hoặc dùng conf file)
 ```
 
 7) Chạy AI server (local)
 - Từ thư mục `DACS/Services/AI_Engine/`:
 ```bash
-# Chạy FastAPI AI server (ai_server_local.py) — mặc định host 0.0.0.0 port 5000
-uvicorn ai_server_local:app --host 0.0.0.0 --port 5000
-# Nếu muốn chạy agent server riêng (có trong repo):
+# Chạy agent server
 uvicorn agent_server_local:app --host 0.0.0.0 --port 5001
 ```
-- Lưu ý: ai_server_local.py chứa endpoint POST `/chat` để trả lời streaming; webapp tự gọi endpoint này để giao tiếp với AI.
+- Lưu ý: agent_server_local.py chứa endpoint POST `/chat` để trả lời streaming; webapp tự gọi endpoint này để giao tiếp với AI.
 
 8) Chạy Webapp ASP.NET (DACS)
 - Từ thư mục gốc hoặc trong Visual Studio mở `DACS.sln`:
@@ -181,8 +178,8 @@ dotnet run
   - File `DACS/firebase_config.json` chứa service account JSON.
   - Program.cs đặt GOOGLE_APPLICATION_CREDENTIALS tới file này.
 - AI engine:
-  - DB path for FAISS: `DB_PATH = "./faiss_db_local"` trong ai_server_local.py
-  - LLM: ai_server_local.py sử dụng ChatOllama(model="llama3") — bạn cần cấu hình môi trường cho Ollama (hoặc chỉnh LLM sang một provider khác).
+  - DB path for FAISS: `DB_PATH = "./faiss_db_local"` trong agent_server_local.py
+  - LLM: agent_server_local.py sử dụng ChatOllama(model="llama3") — bạn cần cấu hình môi trường cho Ollama (hoặc chỉnh LLM sang một provider khác).
   - CLIP model: tải tự động "ViT-L/14" nếu có GPU/CUDA; nếu không, chạy chậm trên CPU.
 - Reference images: `DACS/Services/AI_Engine/KnowledgeBase/ReferenceImages` — tên file sẽ được dùng làm tag/label khi CLIP nhận diện.
 
@@ -193,14 +190,13 @@ dotnet run
 2. Firebase credential phải tồn tại và hợp lệ nếu bạn dùng các chức năng liên quan.
 3. Đặt ảnh mẫu (ReferenceImages) để AI có thể nhận diện ảnh người dùng upload.
 4. Tạo hoặc tải Faiss index (`faiss_db_local`) trước khi dùng AI — nếu không, RAG sẽ không hoạt động.
-5. Kiểm tra LLM / ollama: nếu không có LLM local tương thích, chỉnh ai_server_local.py để gọi service LLM bạn có (OpenAI / llama.cpp wrapper / local model).
+5. Kiểm tra LLM / ollama: nếu không có LLM local tương thích, chỉnh agent_server_local.py để gọi service LLM bạn có (OpenAI / llama.cpp wrapper / local model).
 6. Bảo mật: KHÔNG commit các credential (firebase keys, email passwords, connection strings) vào repo công khai.
 
 ---
 
 ## Các script & file hữu ích
-- `DACS/Services/AI_Engine/ai_server_local.py` — AI server chính (RAG + CLIP + SQL)
-- `DACS/Services/AI_Engine/agent_server_local.py` — agent server
+- `DACS/Services/AI_Engine/agent_server_local.py` — agent server (RAG + CLIP + SQL)
 - `DACS/Services/PythonBridge.cs` — cầu nối nếu ASP.NET cần gọi python scripts nội bộ
 - `DACS/Services/SocketServer.cs` + `DACS/Hubs/ChatHub` — real-time chat
 - `DACS/Services/BlockchainService.cs` — tích hợp Nethereum
@@ -219,7 +215,7 @@ dotnet run
 ## Debug & Troubleshooting
 - AI server báo "AI chưa sẵn sàng": kiểm tra `faiss_db_local` tồn tại và `embedding_model` được load, kiểm tra logs của uvicorn.
 - CLIP không detect ảnh: kiểm tra `DACS/Services/AI_Engine/KnowledgeBase/ReferenceImages` có ảnh hợp lệ hay không; xem output logs khi khởi động.
-- Lỗi SQL: kiểm tra `DB_CONNECTION_STRING` trong ai_server_local.py và `DefaultConnection` trong appsettings.json.
+- Lỗi SQL: kiểm tra `DB_CONNECTION_STRING` trong agent_server_local.py và `DefaultConnection` trong appsettings.json.
 - Firebase lỗi credential: kiểm tra đường dẫn `GOOGLE_APPLICATION_CREDENTIALS` và kiểm tra nội dung `firebase_config.json`.
 
 ---
