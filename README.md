@@ -16,7 +16,7 @@ Saikahana-web là một website thương mại điện tử dành cho thu gom v�
 
 **Xem video giới thiệu đầy đủ về các tính năng chính của Saikahana Web:**
 
-[![Saikahana Web Demo](https://img.youtube.com/vi/QHBbG-jc3zM/0.jpg)](https://youtu.be/QHBbG-jc3zM)
+[Saikahana Web Demo](https://drive.google.com/file/d/1f5rVeX-XdpeO0UAKQwXxQsCYM_GQUHxU/view?usp=sharing)
 
 - 🛒 Mua / Bán sản phẩm phụ phẩm nông nghiệp
 - 🤖 Tư vấn AI với RAG (Retrieval-Augmented Generation) + LLM Local QWEN 2.5
@@ -29,11 +29,11 @@ Saikahana-web là một website thương mại điện tử dành cho thu gom v�
 ## Stack chính
 - Language(s): C# (ASP.NET MVC) + Python (FastAPI AI engine) + SQL Server
 - Framework / runtime:
-  - ASP.NET Core (WebApplication.CreateBuilder — tương thích .NET 6+)
-  - FastAPI (AI server) + Uvicorn
+   - ASP.NET Core (WebApplication.CreateBuilder — tương thích .NET 6+)
+   - FastAPI (AI server) + Uvicorn
 - Notable libraries:
-  - .NET: Entity Framework Core, Identity, SignalR, Swashbuckle (Swagger), Nethereum
-  - Python AI: CLIP, torch, HuggingFace embeddings (langchain_huggingface), FAISS, sentence-transformers, CrossEncoder, rank_bm25, langchain_ollama (ChatOllama)
+   - .NET: Entity Framework Core, Identity, SignalR, Swashbuckle (Swagger), Nethereum
+   - Python AI: CLIP, torch, HuggingFace embeddings (langchain_huggingface), FAISS, sentence-transformers, CrossEncoder, rank_bm25, langchain_ollama (ChatOllama)
 
 ---
 
@@ -58,7 +58,7 @@ SQLQueryprovip.sql         # Script SQL / query hỗ trợ
 
 How it fits together:
 - ASP.NET app (DACS) là frontend + backend chính, phục vụ web và API cho mobile; khởi động đồng thời một SocketServer/SignalR cho chat thời gian thực.
-- AI engine (Python) chạy độc lập (FastAPI) trên cổng **5000**; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG + LLM Local (QWEN 2.5).
+- AI engine (Python) chạy độc lập (FastAPI) trên cổng **5000**; webapp gọi endpoint `/chat` để hỏi AI. AI engine dùng FAISS/embeddings + BM25 + cross-encoder để RAG + LLM Loca[...]
 - Dữ liệu động (giá, tồn kho, lịch sử chat AI) được lấy trực tiếp từ SQL Server bằng SQLAlchemy trong Python (DB_CONNECTION_STRING) và bằng EF Core trong C#.
 
 ---
@@ -75,8 +75,8 @@ How it fits together:
 
 ### 🤖 Tư vấn AI bằng tiếng Việt 100%
 - **RAG (Retrieval-Augmented Generation)**: Trả lời dựa trên 2 nguồn:
-  - **SQL Database**: Giá, tồn kho, thông tin kho bãi
-  - **PDF/CSV Knowledge Base**: Định nghĩa sản phẩm, thông số kỹ thuật, công dụng, sản lượng FAO
+   - **SQL Database**: Giá, tồn kho, thông tin kho bãi
+   - **PDF/CSV Knowledge Base**: Định nghĩa sản phẩm, thông số kỹ thuật, công dụng, sản lượng FAO
 - **LLM Local**: QWEN 2.5 (model tối ưu cho tiếng Việt + đọc hiểu số liệu)
 - **Hybrid Search**: BM25 (từ khóa chính xác) + Vector Search (ngữ nghĩa sâu)
 - **Cache Semantic 95%**: Lưu 2000 câu hỏi đã trả lời → Trả lời tức thời 0.1 giây nếu câu hỏi tương tự
@@ -131,12 +131,12 @@ cd saikahana-web
 
 ### 2) Cấu hình database & appsettings (DACS/appsettings.json)
 - Mở `DACS/appsettings.json` và chỉnh:
-  - ConnectionStrings: `DefaultConnection` → chuỗi kết nối tới SQL Server của bạn (ví dụ: Server=.;Database=QuanLyPhuPham;Trusted_Connection=True;)
-  - EmailSettings: host/port/username/password/from
-  - ESmsSettings: cấu hình nhà cung cấp SMS nếu dùng
+   - ConnectionStrings: `DefaultConnection` → chuỗi kết nối tới SQL Server của bạn (ví dụ: Server=.;Database=QuanLyPhuPham;Trusted_Connection=True;)
+   - EmailSettings: host/port/username/password/from
+   - ESmsSettings: cấu hình nhà cung cấp SMS nếu dùng
 - File firebase: `DACS/firebase_config.json` phải chứa credential service account của Firebase. Program.cs đặt biến môi trường:
-  - GOOGLE_APPLICATION_CREDENTIALS -> đường dẫn tới `firebase_config.json`
-  - Nếu chạy local, đảm bảo file tồn trong `DACS/` hoặc đặt đường dẫn tuyệt đối
+   - GOOGLE_APPLICATION_CREDENTIALS -> đường dẫn tới `firebase_config.json`
+   - Nếu chạy local, đảm bảo file tồn trong `DACS/` hoặc đặt đường dẫn tuyệt đối
 
 ### 3) Cài .NET dependencies & migrations
 - Tạo database & apply migrations (nếu dùng EF Migrations có sẵn):
@@ -166,14 +166,14 @@ pip install uvicorn fastapi pydantic numpy torch pillow langchain_huggingface la
 
 ### 5) Chuẩn bị KnowledgeBase và ReferenceImages
 - Thư mục: `DACS/Services/AI_Engine/KnowledgeBase/`
-  - Đặt PDF tài liệu (dùng cho RAG). Các file PDF sẽ được serve tĩnh từ webapp (Program.cs maps PhysicalFileProvider → /pdfs).
-  - Tạo `ReferenceImages` dưới KnowledgeBase và bỏ ảnh mẫu (png/jpg/webp). CLIP sẽ mã hóa ảnh để so khớp.
+   - Đặt PDF tài liệu (dùng cho RAG). Các file PDF sẽ được serve tĩnh từ webapp (Program.cs maps PhysicalFileProvider → /pdfs).
+   - Tạo `ReferenceImages` dưới KnowledgeBase và bỏ ảnh mẫu (png/jpg/webp). CLIP sẽ mã hóa ảnh để so khớp.
 - **📝 Quy tắc đặt tên PDF** (QUAN TRỌNG):
-  ```
-  [Material]_[Application]_[Author]_[Year].pdf
-  Ví dụ: Cassava_Ethanol_Nguyen_2025.pdf
-  ```
-  Metadata sẽ được trích xuất để AI biết đó là tài liệu nào.
+   ```
+   [Material]_[Application]_[Author]_[Year].pdf
+   Ví dụ: Cassava_Ethanol_Nguyen_2025.pdf
+   ```
+   Metadata sẽ được trích xuất để AI biết đó là tài liệu nào.
 - Tạo Faiss DB (nếu repo chưa có): chạy script indexer (nếu có) hoặc dùng `indexer_local.py` để tạo `faiss_db_local/`.
 
 ### 6) Cấu hình biến môi trường cho AI/Python
@@ -223,12 +223,12 @@ dotnet run
 ```
 
 - Program.cs sẽ:
-  - Khởi động socketServer (Service SocketServer) và map SignalR hub tại `Hubs/ChatHub`.
-  - Serve static files trong thư mục KnowledgeBase dưới route `/pdfs` → ví dụ /pdfs/YourDoc.pdf.
-  - Khởi chạy BlockchainService.TestBlockchainAsync() (non-blocking) nếu cấu hình blockchain hợp lệ.
+   - Khởi động socketServer (Service SocketServer) và map SignalR hub tại `Hubs/ChatHub`.
+   - Serve static files trong thư mục KnowledgeBase dưới route `/pdfs` → ví dụ /pdfs/YourDoc.pdf.
+   - Khởi chạy BlockchainService.TestBlockchainAsync() (non-blocking) nếu cấu hình blockchain hợp lệ.
 
 ### 10) Kết nối mobile / API
-- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví dụ: http://localhost:5001).
+- API dành cho mobile được triển khai trong `DACS/Controllers/Api` và các controller khác. Kiểm tra route (ở Program.cs routing/MapControllers). Dùng base URL của webapp (ví d…[...]
 
 ---
 
